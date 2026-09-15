@@ -13,5 +13,5 @@ pydantic-settings>=2.3
 
 # Desenvolvimento
 pytest>=8.0
-httpx>=0.27
+httpx2>=2.0.0
 ruff>=0.6
