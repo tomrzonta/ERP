@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     @classmethod
     def validar_database_url(cls, valor: str) -> str:
         """Aceita a URL como o provedor entrega, força o driver psycopg 3
-        e recusa marcadores esquecidos, como colchetes em volta da senha."""
+        e recusa erros comuns de montagem da URL."""
         valor = valor.strip()
 
         credenciais = valor.split("://", 1)[-1].rpartition("@")[0]
@@ -27,6 +27,12 @@ class Settings(BaseSettings):
             raise ValueError(
                 "DATABASE_URL com colchetes na senha. Remova os colchetes do "
                 "marcador, deixando apenas usuario:senha@host."
+            )
+
+        if valor.count("@") != 1:
+            raise ValueError(
+                "DATABASE_URL deve ter exatamente um '@', separando "
+                "usuario:senha do host."
             )
 
         for prefixo in ("postgresql://", "postgres://"):
