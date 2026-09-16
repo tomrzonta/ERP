@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.exceptions import registrar_handlers
+from app.modules.auth.router import router as auth_router
 from app.modules.health.router import router as health_router
 
 API_PREFIX = "/api/v1"
@@ -30,6 +31,7 @@ def create_app() -> FastAPI:
 
     # Registre aqui os routers de cada módulo
     app.include_router(health_router, prefix=API_PREFIX)
+    app.include_router(auth_router, prefix=API_PREFIX)
 
     return app
 
