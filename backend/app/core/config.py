@@ -34,6 +34,10 @@ class Settings(BaseSettings):
                 return "postgresql+psycopg://" + valor[len(prefixo) :]
         return valor
 
+    @property
+    def is_production(self) -> bool:
+        return self.environment == "production"
+
 
 @lru_cache
 def get_settings() -> Settings:
