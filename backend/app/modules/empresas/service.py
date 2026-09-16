@@ -1,6 +1,7 @@
 """Regras de negócio de empresas."""
 
 import uuid
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -31,6 +32,14 @@ def gerar_slug_unico(db: Session, nome: str) -> str:
         candidato = f"{base}-{sufixo}"
         sufixo += 1
     return candidato
+
+
+def por_id(db: Session, empresa_id: uuid.UUID) -> Empresa | None:
+    return repository.por_id(db, empresa_id)
+
+
+def ativas_por_ids(db: Session, ids: Iterable[uuid.UUID]) -> list[Empresa]:
+    return repository.ativas_por_ids(db, ids)
 
 
 def criar_empresa_com_padroes(

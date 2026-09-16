@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     database_url: str
     cors_origins: list[str] = ["http://localhost:3000"]
 
+    jwt_secret: str
+    access_token_minutos: int = 15
+    refresh_token_dias: int = 30
+
     @field_validator("database_url")
     @classmethod
     def validar_database_url(cls, valor: str) -> str:
@@ -37,7 +41,15 @@ class Settings(BaseSettings):
 
         for prefixo in ("postgresql://", "postgres://"):
             if valor.startswith(prefixo):
-                return "postgresql+psycopg://" + valor[len(prefixo) :]
+                return "postgresql+psycopg://" + valor[len(prefixo):]
+        return valor
+
+    @field_validator("jwt_secret")
+    @classmethod
+    def validar_jwt_secret(cls, valor: str) -> str:
+        valor = valor.strip()
+        if len(valor) < 32:
+            raise ValueError("JWT_SECRET deve ter pelo menos 32 caracteres.")
         return valor
 
     @property

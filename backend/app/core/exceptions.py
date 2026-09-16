@@ -17,14 +17,29 @@ class AppError(Exception):
         super().__init__(message)
 
 
-class NaoEncontrado(AppError):
-    status_code = 404
-    code = "nao_encontrado"
+class NaoAutenticado(AppError):
+    status_code = 401
+    code = "nao_autenticado"
 
 
 class PermissaoNegada(AppError):
     status_code = 403
     code = "permissao_negada"
+
+
+class EmpresaNaoSelecionada(AppError):
+    status_code = 403
+    code = "empresa_nao_selecionada"
+
+
+class NaoEncontrado(AppError):
+    status_code = 404
+    code = "nao_encontrado"
+
+
+class Conflito(AppError):
+    status_code = 409
+    code = "conflito"
 
 
 class RecursoDoPlano(AppError):
