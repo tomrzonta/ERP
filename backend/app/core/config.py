@@ -17,17 +17,22 @@ class Settings(BaseSettings):
 
     @field_validator("database_url")
     @classmethod
-    def usar_driver_psycopg(cls, valor: str) -> str:
-        """Aceita a URL como o provedor entrega e força o driver psycopg 3."""
+    def validar_database_url(cls, valor: str) -> str:
+        """Aceita a URL como o provedor entrega, força o driver psycopg 3
+        e recusa marcadores esquecidos, como colchetes em volta da senha."""
         valor = valor.strip()
+
+        credenciais = valor.split("://", 1)[-1].rpartition("@")[0]
+        if "[" in credenciais or "]" in credenciais:
+            raise ValueError(
+                "DATABASE_URL com colchetes na senha. Remova os colchetes do "
+                "marcador, deixando apenas usuario:senha@host."
+            )
+
         for prefixo in ("postgresql://", "postgres://"):
             if valor.startswith(prefixo):
                 return "postgresql+psycopg://" + valor[len(prefixo) :]
         return valor
-
-    @property
-    def is_production(self) -> bool:
-        return self.environment == "production"
 
 
 @lru_cache

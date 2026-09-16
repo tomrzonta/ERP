@@ -1,4 +1,11 @@
 from app.core.config import Settings
+import pytest
+from pydantic import ValidationError
+
+
+def test_recusa_colchetes_na_senha():
+    with pytest.raises(ValidationError):
+        criar("postgresql://u:[senha]@host:5432/db")
 
 
 def criar(url: str) -> Settings:

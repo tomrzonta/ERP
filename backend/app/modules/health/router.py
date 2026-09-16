@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.shared.seguranca import mascarar_segredos
 
 router = APIRouter(tags=["health"])
 logger = logging.getLogger("uvicorn.error")
@@ -20,9 +21,11 @@ def health(db: Session = Depends(get_db)):
         db.execute(text("SELECT 1"))
         banco = "ok"
     except Exception as erro:
-        # Registra só o tipo e a mensagem do erro, sem expor a URL de conexão
+        # Nunca registrar a mensagem crua: ela pode conter a senha do banco
         logger.error(
-            "Health check: banco indisponivel: %s: %s", type(erro).__name__, erro
+            "Health check: banco indisponivel: %s: %s",
+            type(erro).__name__,
+            mascarar_segredos(str(erro)),
         )
         banco = "indisponivel"
 
