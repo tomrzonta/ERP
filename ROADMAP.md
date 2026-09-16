@@ -15,6 +15,8 @@ Sistema de gestão simples para microempreendedores: produtos, PDV, estoque, fin
 
 **Todos os canais, um só estoque:** balcão, vitrine online e marketplaces (Mercado Livre, Shopee) descontam do mesmo estoque — inclusive produtos compostos — com margem real por canal.
 
+**Relacionamento com clientes:** cadastro com histórico de compras, cupons, fidelidade e campanhas para quem já compra, respeitando a LGPD.
+
 **Posicionamento dos planos:**
 - **Base** → *operar* o negócio.
 - **Pro** → *entender e crescer* o negócio.
@@ -58,6 +60,10 @@ Sistema de gestão simples para microempreendedores: produtos, PDV, estoque, fin
 15. **API pública separada da API de gestão.** A vitrine usa rotas próprias, sem login, somente leitura de dados públicos e com limite de requisições. Custo e margem nunca saem por elas.
 16. **Credenciais de terceiros criptografadas.** Tokens de acesso aos marketplaces nunca ficam em texto puro no banco.
 17. **Integrações fora da requisição.** Sincronizações, notificações e novas tentativas rodam em tarefas de segundo plano, não enquanto o usuário espera.
+18. **Usuário não é cliente.** Usuários operam o sistema e fazem login (globais, ligados a empresas por `membros`). Clientes compram do lojista, pertencem a uma única empresa e nunca são cruzados entre empresas.
+19. **Saldos como livro de movimentações.** Assim como o estoque, o saldo de fidelidade é a soma de créditos, resgates, expirações e estornos.
+20. **Preço de tabela, desconto e preço final separados na venda.** Permite medir quanto da margem foi consumido por descontos, cupons e fidelidade.
+21. **Nada referenciado por histórico é excluído.** Usuários, membros e produtos são desativados; dados pessoais de clientes podem ser anonimizados, mas as vendas permanecem.
 
 ---
 
@@ -79,9 +85,14 @@ Sistema de gestão simples para microempreendedores: produtos, PDV, estoque, fin
 | Integração com marketplaces | — | ✓ |
 | Estoque de segurança por canal | — | ✓ |
 | Margem real por canal (comissões e frete) | — | ✓ |
+| Cadastro de clientes e histórico de compras | ✓ Ilimitado | ✓ |
+| Desconto manual com limite por permissão | ✓ | ✓ |
+| Cupons | — | ✓ |
+| Fidelidade (carimbos e cashback) | — | ✓ |
+| Segmentação de clientes e campanhas | — | ✓ |
 | Financeiro | Caixa do dia, entradas e saídas | Contas a pagar/receber, fluxo projetado |
 | Usuários | 1 a 2, papéis fixos | Vários, papéis editáveis |
-| Gráficos e relatórios | Resumo básico | Completos, exportáveis, por canal |
+| Gráficos e relatórios | Resumo básico | Completos, exportáveis, por canal e por cliente |
 | Alertas (estoque baixo, margem caindo) | — | ✓ |
 
 ### 4.2 Estratégias de conversão para o Pro
@@ -106,12 +117,14 @@ Recursos exclusivos do Pro ficam somente leitura enquanto o cliente estiver no B
 - **PDV offline:** apenas um dispositivo permanece autorizado a operar offline.
 - **Marketplaces:** a sincronização é pausada e o cliente é avisado de que o estoque dos anúncios deixa de ser atualizado. Os vínculos entre anúncios e produtos são mantidos.
 - **Vitrine:** volta ao endereço padrão; produtos acima do limite deixam de ser exibidos.
+- **Cupons:** deixam de ser aceitos em novas vendas; histórico de uso preservado.
+- **Fidelidade:** para de acumular, mas **os saldos já conquistados pelos clientes continuam resgatáveis** até a expiração prevista nas regras. O cliente final não pode ser prejudicado pela troca de plano do lojista.
 
 ### 4.4 Modelo de regras de plano
 
 | Tipo | Exemplos |
 |---|---|
-| Recursos (liga/desliga) | `custos_adicionais`, `composto_montado`, `composto_aninhado`, `papeis_editaveis`, `margem_avancada`, `alertas`, `marketplaces`, `dominio_proprio`, `margem_por_canal` |
+| Recursos (liga/desliga) | `custos_adicionais`, `composto_montado`, `composto_aninhado`, `papeis_editaveis`, `margem_avancada`, `alertas`, `marketplaces`, `dominio_proprio`, `margem_por_canal`, `cupons`, `fidelidade`, `segmentacao_clientes` |
 | Limites (numéricos) | `max_produtos_simples = 200`, `max_compostos = 5`, `max_usuarios = 2`, `max_caixas_offline = 1`, `max_produtos_vitrine` |
 | Estado da assinatura | `trial` · `ativa` · `inadimplente` · `cancelada` |
 
@@ -127,6 +140,9 @@ Pagamento em atraso **não bloqueia no mesmo dia**: há um período de carência
 - [ ] Limite de produtos publicados na vitrine do Base
 - [ ] Primeiro marketplace a integrar (decidir com base em onde os primeiros clientes vendem)
 - [ ] Ferramenta de tarefas em segundo plano
+- [ ] Provedor de envio de e-mails (recuperação de senha, verificação, convites) — escolher antes do beta
+- [ ] Política de anonimização de clientes e prazos de guarda de dados (validar com assessoria jurídica)
+- [ ] Limites de desconto padrão por papel
 - [ ] Região de produção: manter Render + Supabase nos EUA ou migrar API e banco juntos para São Paulo (decidir com medições reais antes dos primeiros clientes)
 
 ---
@@ -214,9 +230,78 @@ Toda venda registra o **canal de origem** e, quando houver, as **taxas do canal*
 
 ---
 
-## 7. Ambientes e fluxo de deploy
+## 7. Clientes e relacionamento
 
-### 7.1 Ambientes
+### 7.1 Cadastro
+
+- Cada cliente pertence a **uma empresa**; dados nunca são compartilhados ou cruzados entre empresas.
+- Campos: nome, **telefone** (principal meio de contato), e-mail, CPF (opcional; necessário para CPF na nota), data de nascimento, endereço, **consentimento de marketing** (com data) e origem (balcão, vitrine, marketplace).
+- Cliente é **opcional na venda**; vendas de balcão sem identificação continuam rápidas.
+- UUID gerado no dispositivo, permitindo cadastro no PDV offline.
+- **Mesclar clientes duplicados** (ex. mesmo telefone cadastrado em dois caixas), unindo histórico e saldos.
+- Clientes vindos de marketplaces ficam marcados e **fora de ações de marketing**, respeitando as regras de cada marketplace.
+
+### 7.2 Histórico de compras
+
+- O histórico é **derivado das vendas** ligadas ao cliente, não uma cópia separada.
+- Na ficha do cliente: compras, itens, valores, descontos, cupons usados, canal e movimentações de fidelidade.
+- Métricas mantidas por cliente para consultas rápidas (recalculáveis a partir das vendas): primeira e última compra, quantidade de compras, valor total e ticket médio.
+- Cancelamento de venda atualiza as métricas.
+- No PDV offline, o caixa consulta apenas os dados básicos do cliente; o histórico completo é consultado online.
+
+### 7.3 Segmentação ("febre" do cliente)
+
+Classificação pelo método **RFM**: **R**ecência (há quanto tempo comprou), **F**requência (quantas vezes) e **V**alor (quanto gastou).
+
+| Segmento | Perfil típico | Ação sugerida |
+|---|---|---|
+| Campeões | Compraram recentemente, com frequência e alto valor | Bonificação, acesso antecipado |
+| Fiéis | Compram com frequência | Fidelidade, cupons exclusivos |
+| Novos | Primeira compra recente | Incentivo à segunda compra |
+| Em risco | Compravam bem, mas sumiram | Campanha de retorno |
+| Perdidos | Sem compras há muito tempo | Reativação ou nenhuma ação |
+
+- Segmentos recalculados periodicamente em segundo plano.
+- Faixas de recência e frequência ajustáveis, pois variam por tipo de negócio.
+
+### 7.4 Descontos, cupons e fidelidade
+
+**Descontos**
+- Venda guarda preço de tabela, desconto e preço final.
+- Limite de desconto por papel; acima dele, autorização de quem tem `vendas.desconto_acima_limite`, registrada na auditoria.
+
+**Cupons**
+- Código, tipo (percentual ou valor fixo), validade, valor mínimo, produtos e canais válidos, limite total e por cliente.
+- Cada uso ligado à venda; cancelamento devolve o uso.
+- **Cupons com limite de uso só funcionam online**; cupons sem limite funcionam também offline.
+- Alerta quando o cupom leva a venda abaixo do custo.
+- Aceitos na vitrine.
+
+**Fidelidade**
+- Modelos iniciais: **cartão de carimbos** e **cashback**. Pontos com catálogo de recompensas fica como evolução futura.
+- Saldo como livro de movimentações (crédito, resgate, expiração, estorno).
+- Regras de acúmulo, uso e expiração exibidas de forma clara ao cliente final.
+
+### 7.5 Campanhas
+
+- Selecionar clientes por segmento, aniversário, inatividade ou histórico de compra.
+- Ações: bonificar com cashback, gerar cupom exclusivo, exportar lista para contato.
+- **Contato de marketing só com clientes que deram consentimento.** Bonificação no saldo não depende de consentimento; o envio de mensagem, sim.
+- Envio automático por WhatsApp ou e-mail fica como evolução futura.
+
+### 7.6 Direitos do cliente (LGPD)
+
+- **Exportar** os dados e o histórico de compras de um cliente, quando ele solicitar.
+- **Corrigir** dados cadastrais.
+- **Anonimizar** a pedido: dados pessoais substituídos, vendas preservadas para fins contábeis e fiscais.
+- Registro na auditoria de exportações e anonimizações.
+- Regras e prazos a validar com assessoria jurídica.
+
+---
+
+## 8. Ambientes e fluxo de deploy
+
+### 8.1 Ambientes
 
 | Ambiente | Para quê | Backend e worker | Banco | Frontend e vitrine |
 |---|---|---|---|---|
@@ -226,7 +311,7 @@ Toda venda registra o **canal de origem** e, quando houver, as **taxas do canal*
 
 A troca entre ambientes é feita só por variáveis (ex. `DATABASE_URL`), nunca por mudança de código.
 
-### 7.2 Fluxo de branches
+### 8.2 Fluxo de branches
 
 ```
 feature/<nome>  →  develop  →  main
@@ -237,7 +322,7 @@ feature/<nome>  →  develop  →  main
 2. Pull Request para `develop` → deploy automático em staging → teste manual.
 3. Merge de `develop` em `main` → deploy automático em produção.
 
-### 7.3 Regras
+### 8.3 Regras
 
 - **Staging e produção nunca compartilham banco.**
 - **Migrações sempre passam pelo staging antes da produção.**
@@ -255,12 +340,12 @@ feature/<nome>  →  develop  →  main
 
 ---
 
-## 8. Fases de desenvolvimento
+## 9. Fases de desenvolvimento
 
 > **Mudanças em relação ao rascunho inicial:**
 > - O *motor de planos* sobe para a Fase 1, porque quase todos os módulos dependem dele. A *cobrança* com Asaas fica na Fase 7.
 > - O *PDV offline* entra como Fase 4, logo após o PDV online.
-> - *Vitrine* (Fase 8) e *marketplaces* (Fase 9) entram depois das assinaturas, com o núcleo validado. As bases que eles exigem (SKU, dados públicos, reserva de estoque, canal e taxas na venda) já entram nas Fases 2 e 3.
+> - *Clientes, cupons e fidelidade* (Fase 8), *vitrine* (Fase 9) e *marketplaces* (Fase 10) entram depois das assinaturas, com o núcleo validado. As bases que eles exigem (SKU, dados públicos, reserva de estoque, cliente, canal, descontos e taxas na venda) já entram nas Fases 2 e 3.
 
 ### Fase 0 — Setup do projeto e ambientes
 **Código e ambiente local**
@@ -291,14 +376,37 @@ feature/<nome>  →  develop  →  main
 - [ ] Plano pago da Vercel para uso comercial (e avaliar time próprio para o ERP)
 
 ### Fase 1 — Fundação
-- [ ] Autenticação (login, JWT, hash de senha)
-- [ ] Empresas e isolamento multi-tenant automático
-- [ ] Usuários, papéis e permissões granulares
+
+**Decisões**
+- Autenticação **própria no FastAPI** (portabilidade, sessão offline e multi-empresa), com bibliotecas consolidadas para hash e tokens.
+- Usuário **global**, podendo pertencer a **várias empresas** via `membros`.
+- Permissões **definidas no código** de cada módulo; o banco guarda só os códigos concedidos a cada papel.
+- Papéis **por empresa**, criados a partir de padrões (Dono protegido, Gerente, Caixa, Estoquista).
+- Permissões fora do token: consultadas a cada requisição (com cache curto) para revogação imediata.
+
+**Tabelas**
+- [ ] `usuarios` (global), `empresas` (com `slug` e fuso horário), `membros` (status ativo, convidado, desativado)
+- [ ] `papeis` e `papel_permissoes`
+- [ ] `planos`, `plano_regras` (recursos e limites) e `assinaturas`
+- [ ] `sessoes` (token de renovação guardado como hash), `dispositivos`, `convites` e `auditoria`
+
+**Funcionalidades**
+- [ ] Primeira migração e execução de migrações no staging
+- [ ] Cadastro de conta criando empresa, papéis padrão e assinatura Pro em trial
+- [ ] Login com escolha de empresa quando o usuário pertence a mais de uma
+- [ ] Token de acesso curto e token de renovação rotativo e revogável
+- [ ] "Sair de todos os dispositivos" e revogação imediata de membros desativados
+- [ ] Limite de tentativas de login
+- [ ] Isolamento multi-tenant automático (empresa sempre vinda do token, filtro na camada base)
+- [ ] Registro de outra empresa retorna "não encontrado"
+- [ ] Testes automatizados de isolamento entre empresas (obrigatórios em cada módulo novo)
+- [ ] Catálogo de permissões por módulo (incluindo `produtos.ver_custo`, `clientes.ver`, `clientes.editar`, `vendas.desconto_acima_limite`)
 - [ ] Papéis fixos (Base) e papéis editáveis (Pro)
-- [ ] **Motor de planos:** tabela de planos, recursos, limites e estado da assinatura
-- [ ] Helpers `requer_recurso(...)` e `verificar_limite(...)`
+- [ ] **Motor de planos:** helpers `requer_recurso(...)` e `verificar_limite(...)`
 - [ ] Trial reverso: empresa nova nasce com Pro por 14 dias
-- [ ] Cadastro de dispositivos (base para caixas offline)
+- [ ] Convites por e-mail com link de validade limitada
+- [ ] Auditoria de ações sensíveis (permissões, membros, assinatura)
+- [ ] Estrutura de recuperação de senha e verificação de e-mail (envio real depende do provedor de e-mail)
 
 ### Fase 2 — Produtos e estoque (coração do sistema)
 - [ ] Produto simples (preço, custo, campos fiscais previstos)
@@ -325,7 +433,14 @@ feature/<nome>  →  develop  →  main
 - [ ] UUID da venda e dos itens gerado no frontend
 - [ ] Endpoint de venda idempotente
 - [ ] Datas `ocorrido_em` e `registrado_em`
-- [ ] Descontos e formas de pagamento
+- [ ] Formas de pagamento
+- [ ] Preço de tabela, desconto e preço final separados na venda
+- [ ] Limite de desconto por papel, com autorização acima do limite
+- [ ] **Cadastro de clientes** (seção 7.1), com UUID gerado no dispositivo
+- [ ] Cliente opcional na venda, busca rápida por telefone ou nome
+- [ ] Histórico de compras na ficha do cliente e métricas por cliente
+- [ ] Mesclar clientes duplicados
+- [ ] Exportar, corrigir e anonimizar dados de clientes (LGPD)
 - [ ] Cancelamento de venda com estorno de estoque
 - [ ] Venda de compostos congelados até zerar o estoque
 
@@ -333,7 +448,7 @@ feature/<nome>  →  develop  →  main
 - [ ] Frontend como PWA instalável
 - [ ] Cópia local de produtos, preços e estoque (IndexedDB)
 - [ ] Atualização periódica da cópia local enquanto online
-- [ ] Fila local de vendas e movimentações de caixa pendentes
+- [ ] Fila local de vendas, clientes novos e movimentações de caixa pendentes
 - [ ] Indicador de status (online, offline, pendências)
 - [ ] Sincronização automática ao reconectar
 - [ ] Tratamento de conflitos conforme seção 5.4
@@ -350,6 +465,8 @@ feature/<nome>  →  develop  →  main
 - [ ] Resumo básico (Base)
 - [ ] Margem esperada vs. real, histórico e por venda (Pro)
 - [ ] Vendas e margem por canal (Pro)
+- [ ] Relatórios de clientes: ticket médio, recorrência, novos vs. recorrentes (Pro)
+- [ ] Impacto de descontos na margem (Pro)
 - [ ] Gráficos completos e exportação (Pro)
 - [ ] Alertas de estoque baixo, estoque negativo e margem caindo (Pro)
 - [ ] Avisos contextuais de upgrade com dados reais (Base)
@@ -360,14 +477,28 @@ feature/<nome>  →  develop  →  main
 - [ ] Planos mensal e anual (com desconto)
 - [ ] Transições de estado: trial → ativa → inadimplente → cancelada
 - [ ] Período de carência por inadimplência
-- [ ] Fluxo de downgrade: compostos, caixas offline, vitrine e marketplaces (seção 4.3)
+- [ ] Fluxo de downgrade: compostos, caixas offline, vitrine, marketplaces, cupons e fidelidade (seção 4.3)
 - [ ] Reativação automática ao voltar para o Pro
 
-### Fase 8 — Vitrine online
+### Fase 8 — Clientes: cupons, fidelidade e campanhas
+- [ ] Cupons com regras de validade, valor mínimo, produtos, canais e limites (seção 7.4)
+- [ ] Cupons com limite de uso apenas online; sem limite também offline
+- [ ] Alerta de cupom que leva a venda abaixo do custo
+- [ ] Fidelidade por cartão de carimbos
+- [ ] Fidelidade por cashback, com saldo como livro de movimentações e expiração
+- [ ] Estorno de fidelidade e de uso de cupom no cancelamento da venda
+- [ ] Segmentação RFM recalculada em segundo plano, com faixas ajustáveis (seção 7.3)
+- [ ] Aniversariantes e clientes inativos
+- [ ] Campanhas: bonificar segmento com cashback, gerar cupom exclusivo, exportar lista para contato
+- [ ] Respeito ao consentimento de marketing e exclusão de clientes de marketplaces
+
+### Fase 9 — Vitrine online
 - [ ] Aplicação `loja/` no monorepo, publicada na Vercel
 - [ ] API pública separada, somente leitura, com limite de requisições
 - [ ] Página da loja e página de produto, otimizadas para busca (SEO)
 - [ ] Carrinho e finalização do pedido via WhatsApp
+- [ ] Aplicação de cupons na vitrine
+- [ ] Identificação do cliente pelo telefone, ligando o pedido ao cadastro
 - [ ] Pedido pendente com reserva de estoque e expiração
 - [ ] Confirmação do pedido no ERP (vira venda com canal "vitrine")
 - [ ] Endereço padrão por loja
@@ -375,7 +506,7 @@ feature/<nome>  →  develop  →  main
 - [ ] Limite de produtos publicados por plano
 - [ ] Textos e campos de apoio às obrigações legais
 
-### Fase 9 — Marketplaces (etapa 1: vincular e sincronizar)
+### Fase 10 — Marketplaces (etapa 1: vincular e sincronizar)
 - [ ] Módulo `canais` com interface genérica e adaptadores
 - [ ] Worker de tarefas em segundo plano (serviço separado)
 - [ ] Credenciais criptografadas e renovação automática de acesso
@@ -389,20 +520,23 @@ feature/<nome>  →  develop  →  main
 - [ ] Tratamento separado de anúncios em fulfillment
 - [ ] Painel de status da integração (última sincronização, erros, autorização expirada)
 
-### Fase 10 — Fiscal (futuro)
+### Fase 11 — Fiscal (futuro)
 - [ ] Entrada de notas (XML de compra → movimentação de estoque)
 - [ ] Emissão de NF-e / NFC-e
 - [ ] NFC-e em contingência offline, integrada à fila de sincronização
+- [ ] CPF do cliente na nota a partir do cadastro
 - [ ] Saída de notas
 
 ### Evoluções futuras
 - [ ] Segundo marketplace (novo adaptador)
+- [ ] Fidelidade por pontos com catálogo de recompensas
+- [ ] Envio automático de campanhas por WhatsApp ou e-mail
 - [ ] Marketplaces etapa 2: criar e editar anúncios pelo ERP
 - [ ] App desktop (Tauri ou Electron + SQLite) com acesso a impressora térmica e gaveta
 
 ---
 
-## 9. Estrutura de pastas (referência)
+## 10. Estrutura de pastas (referência)
 
 ```
 erp/
@@ -420,9 +554,13 @@ erp/
 │   │       ├── produtos/
 │   │       ├── estoque/
 │   │       ├── vendas/
+│   │       ├── clientes/
+│   │       ├── promocoes/     # cupons e campanhas
+│   │       ├── fidelidade/
 │   │       ├── financeiro/
 │   │       ├── relatorios/
 │   │       ├── assinaturas/
+│   │       ├── auditoria/
 │   │       ├── vitrine/       # rotas públicas da loja
 │   │       ├── canais/
 │   │       │   └── adaptadores/   # um por marketplace
