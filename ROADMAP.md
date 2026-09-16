@@ -127,6 +127,7 @@ Pagamento em atraso **não bloqueia no mesmo dia**: há um período de carência
 - [ ] Limite de produtos publicados na vitrine do Base
 - [ ] Primeiro marketplace a integrar (decidir com base em onde os primeiros clientes vendem)
 - [ ] Ferramenta de tarefas em segundo plano
+- [ ] Região de produção: manter Render + Supabase nos EUA ou migrar API e banco juntos para São Paulo (decidir com medições reais antes dos primeiros clientes)
 
 ---
 
@@ -246,6 +247,10 @@ feature/<nome>  →  develop  →  main
 - **Conexão Render → Supabase pelo Session pooler** (o Render exige IPv4).
 - **Data API do Supabase desativada:** todo acesso aos dados passa pelo FastAPI.
 - **Staging conectado a contas de teste dos marketplaces**, nunca às contas reais dos clientes.
+- **API e banco sempre na mesma região** (hoje: Render Virginia + Supabase us-east-1 + funções da Vercel em iad1).
+- **Senha do banco só com letras e números**, gerada aleatoriamente e trocada se aparecer em logs ou prints.
+- **Testar antes de enviar:** rodar `pytest` e só fazer commit se todos os testes passarem.
+- **CORS com endereços exatos:** o endereço fixo da branch na Vercel, sem barra no final. Variáveis `NEXT_PUBLIC_` exigem novo deploy ao mudar.
 - Planos gratuitos são aceitáveis para staging; produção com clientes pagantes deve usar planos pagos.
 
 ---
@@ -270,10 +275,11 @@ feature/<nome>  →  develop  →  main
 
 **Git e ambientes na nuvem**
 - [x] Branches `main` (produção) e `develop` (staging)
-- [ ] Projeto Supabase de staging
-- [ ] Serviço Render de staging apontando para `develop`
-- [ ] Vercel com previews por branch
-- [ ] Deploy inicial em staging logo no começo (não esperar o beta)
+- [x] Projeto Supabase de staging (us-east-1)
+- [x] Serviço Render de staging apontando para `develop` (Virginia, Docker, health check)
+- [x] Vercel com previews por branch (endereço fixo da branch `develop` liberado no CORS)
+- [x] Deploy inicial em staging logo no começo (não esperar o beta)
+- [x] Validação da `DATABASE_URL` e senha mascarada nos logs
 
 **Mais adiante (antes dos primeiros clientes)**
 - [ ] Projeto Supabase de produção
@@ -281,6 +287,8 @@ feature/<nome>  →  develop  →  main
 - [ ] Migração para planos pagos de hospedagem
 - [ ] GitHub Actions rodando testes a cada Pull Request
 - [ ] Execução automática de migrações no deploy
+- [ ] Definir região de produção com medições reais a partir do Brasil
+- [ ] Plano pago da Vercel para uso comercial (e avaliar time próprio para o ERP)
 
 ### Fase 1 — Fundação
 - [ ] Autenticação (login, JWT, hash de senha)
