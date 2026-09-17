@@ -17,6 +17,10 @@ Sistema de gestão simples para microempreendedores: produtos, PDV, estoque, fin
 
 **Relacionamento com clientes:** cadastro com histórico de compras, cupons, fidelidade e campanhas para quem já compra, respeitando a LGPD.
 
+**Produção artesanal e insumos:** produtos e insumos em frações (gramas, mililitros, fatias), tempo de preparo e capacidade de produção por dia.
+
+**Operação do próprio SaaS:** console interno com gestão de assinantes, cobrança integrada à fintech e CRM com métricas do negócio.
+
 **Posicionamento dos planos:**
 - **Base** → *operar* o negócio.
 - **Pro** → *entender e crescer* o negócio.
@@ -33,11 +37,12 @@ Sistema de gestão simples para microempreendedores: produtos, PDV, estoque, fin
 | Arquivos (fotos de produtos) | Supabase Storage | Supabase |
 | Frontend de gestão | Next.js · TypeScript | Vercel |
 | Vitrine online | Next.js · TypeScript (aplicação separada) | Vercel |
+| Console da plataforma (equipe interna) | Next.js · TypeScript (aplicação separada) | Vercel |
 | Modo offline | PWA · IndexedDB | Navegador do cliente |
-| Pagamentos (assinaturas) | Asaas | — |
+| Pagamentos (assinaturas) | Provedor via adaptador (Asaas é candidato) | — |
 | App desktop (evolução futura) | Tauri ou Electron · SQLite | Máquina do cliente |
 
-**Arquitetura:** monolito modular em monorepo (`backend/`, `frontend/` e `loja/`).
+**Arquitetura:** monolito modular em monorepo (`backend/`, `frontend/`, `loja/` e `admin/`).
 
 ---
 
@@ -64,6 +69,11 @@ Sistema de gestão simples para microempreendedores: produtos, PDV, estoque, fin
 19. **Saldos como livro de movimentações.** Assim como o estoque, o saldo de fidelidade é a soma de créditos, resgates, expirações e estornos.
 20. **Preço de tabela, desconto e preço final separados na venda.** Permite medir quanto da margem foi consumido por descontos, cupons e fidelidade.
 21. **Nada referenciado por histórico é excluído.** Usuários, membros e produtos são desativados; dados pessoais de clientes podem ser anonimizados, mas as vendas permanecem.
+22. **Quantidades nunca em `float`.** Quantidades em `Decimal` com até 4 casas; custos unitários com até 6 casas (ex. custo por grama); valores finais em dinheiro com 2 casas.
+23. **Estoque e custo sempre na unidade base do produto.** Conversões (caixa, fatia, quilo) acontecem só na entrada e na saída; o livro de movimentações nunca mistura unidades.
+24. **Plataforma separada dos assinantes.** A equipe interna usa aplicação, rotas e contas próprias, com MFA e auditoria total. É o único lugar com visão entre empresas, e por isso nunca reaproveita o contexto de empresa dos assinantes.
+25. **Pagamentos por adaptadores.** O sistema conhece operações genéricas (criar assinatura, gerar cobrança, processar evento); cada fintech é um adaptador. Dados de cartão nunca passam pelo sistema.
+26. **Exceções de plano são dados com validade e motivo.** Ajustes por empresa (liberar recurso, ampliar limite) ficam registrados, expiram e são aplicados pelo motor de planos, nunca por condições no código.
 
 ---
 
@@ -80,6 +90,11 @@ Sistema de gestão simples para microempreendedores: produtos, PDV, estoque, fin
 | Composto dentro de composto | — | ✓ |
 | Margem | Margem simples do produto | Esperada vs. real, histórico, por venda |
 | PDV e baixa de estoque | ✓ | ✓ |
+| Unidades fracionadas (g, kg, ml, l, m) e unidades alternativas (caixa, fatia) | ✓ | ✓ |
+| Insumos e composição com quantidades fracionadas | ✓ | ✓ |
+| Perda percentual por componente | — | ✓ |
+| Tempo de preparo do produto | ✓ | ✓ |
+| Recursos produtivos, capacidade diária e custo por hora | — | ✓ |
 | PDV offline | 1 caixa | Vários caixas simultâneos |
 | Vitrine online com pedido via WhatsApp | Produtos publicados limitados, endereço padrão | Ilimitado, domínio próprio |
 | Integração com marketplaces | — | ✓ |
@@ -119,14 +134,17 @@ Recursos exclusivos do Pro ficam somente leitura enquanto o cliente estiver no B
 - **Vitrine:** volta ao endereço padrão; produtos acima do limite deixam de ser exibidos.
 - **Cupons:** deixam de ser aceitos em novas vendas; histórico de uso preservado.
 - **Fidelidade:** para de acumular, mas **os saldos já conquistados pelos clientes continuam resgatáveis** até a expiração prevista nas regras. O cliente final não pode ser prejudicado pela troca de plano do lojista.
+- **Produção:** recursos produtivos e custo por hora ficam somente leitura; o custo já calculado dos produtos é preservado. Perdas percentuais continuam aplicadas às composições existentes, mas não podem ser editadas.
+- **Ajustes por empresa** concedidos pela equipe continuam valendo até a validade, independentemente do plano.
 
 ### 4.4 Modelo de regras de plano
 
 | Tipo | Exemplos |
 |---|---|
-| Recursos (liga/desliga) | `custos_adicionais`, `composto_montado`, `composto_aninhado`, `papeis_editaveis`, `margem_avancada`, `alertas`, `marketplaces`, `dominio_proprio`, `margem_por_canal`, `cupons`, `fidelidade`, `segmentacao_clientes` |
+| Recursos (liga/desliga) | `custos_adicionais`, `composto_montado`, `composto_aninhado`, `papeis_editaveis`, `margem_avancada`, `alertas`, `marketplaces`, `dominio_proprio`, `margem_por_canal`, `cupons`, `fidelidade`, `segmentacao_clientes`, `perda_na_composicao`, `capacidade_producao` |
 | Limites (numéricos) | `max_produtos_simples = 200`, `max_compostos = 5`, `max_usuarios = 2`, `max_caixas_offline = 1`, `max_produtos_vitrine` |
 | Estado da assinatura | `trial` · `ativa` · `inadimplente` · `cancelada` |
+| Ajustes por empresa | Recurso liberado ou limite alterado para uma empresa específica, com validade e motivo, sobrepondo as regras do plano |
 
 Pagamento em atraso **não bloqueia no mesmo dia**: há um período de carência antes de qualquer congelamento.
 
@@ -144,6 +162,10 @@ Pagamento em atraso **não bloqueia no mesmo dia**: há um período de carência
 - [ ] Política de anonimização de clientes e prazos de guarda de dados (validar com assessoria jurídica)
 - [ ] Limites de desconto padrão por papel
 - [ ] Região de produção: manter Render + Supabase nos EUA ou migrar API e banco juntos para São Paulo (decidir com medições reais antes dos primeiros clientes)
+- [ ] Fintech de pagamentos (Asaas é candidata; escolher antes da Fase 7)
+- [ ] CRM de vendas para leads antes do cadastro: construir ou integrar ferramenta de mercado
+- [ ] Política de acesso do suporte aos dados do assinante (duração da liberação, somente leitura, LGPD)
+- [ ] Lista inicial de unidades de medida e casas decimais exibidas por unidade
 
 ---
 
@@ -299,9 +321,109 @@ Classificação pelo método **RFM**: **R**ecência (há quanto tempo comprou), 
 
 ---
 
-## 8. Ambientes e fluxo de deploy
+## 8. Unidades, insumos e produção
 
-### 8.1 Ambientes
+### 8.1 Unidades de medida
+
+- Cada produto tem uma **unidade de estoque** (base): unidade, grama, quilo, mililitro, litro, centímetro, metro ou metro quadrado.
+- Quantidades **decimais** em estoque, composições, movimentações e vendas.
+- **Conversões fixas** entre unidades da mesma grandeza (kg ↔ g, l ↔ ml, m ↔ cm).
+- **Unidades alternativas por produto**, com fator de conversão definido pelo lojista:
+  - de compra: rolo de filamento de 1 kg, saco de terra de 5 kg, caixa com 12 unidades;
+  - de venda: fatia = 1/8 do bolo, porção de 250 g.
+- Estoque e custo **registrados sempre na unidade base**; a conversão acontece apenas na entrada e na saída.
+
+### 8.2 Insumos e composição fracionada
+
+- O produto pode ser **vendável**, **insumo** ou os dois. Insumo não vendável (filamento, terra) não aparece no PDV nem na vitrine.
+- Cada componente da composição tem **quantidade fracionada** na unidade dele, e o custo é proporcional.
+- A venda de um composto dá baixa **exatamente na fração consumida** de cada insumo, nunca em uma unidade inteira.
+- Disponibilidade de kit: menor resultado entre os componentes de *saldo ÷ quantidade por kit*, arredondado para baixo.
+- **Perda percentual por componente** (Pro): ex. 5% de filamento em suportes e falhas de impressão, somada ao consumo e ao custo.
+- Venda fracionada no PDV (ex. 0,350 kg); integração com balança como evolução futura.
+
+**Exemplo — Vaso impresso com suculenta**
+
+| Componente | Unidade base | Quantidade no composto | Baixa por venda |
+|---|---|---|---|
+| Filamento PLA | g | 85 g (+5% de perda no Pro) | 85 g (ou 89,25 g) |
+| Terra adubada | kg | 0,150 kg | 0,150 kg |
+| Suculenta | un | 1 | 1 un |
+| Embalagem | un | 1 | 1 un |
+
+### 8.3 Tempo de preparo e capacidade de produção
+
+- **Tempo de preparo** por produto, separado em:
+  - **tempo ativo**: trabalho de uma pessoa (acabamento, montagem);
+  - **tempo de máquina**: recurso trabalhando sem atenção constante (impressão, forno).
+- Tempo **por unidade** ou **por lote com rendimento** (ex. fornada: 12 unidades em 40 minutos).
+- Compostos somam o tempo de montagem próprio aos tempos dos componentes produzidos internamente; componentes comprados prontos não contam.
+- **Recursos produtivos** (Pro): pessoas e máquinas, com quantidade e horas disponíveis por dia (ex. 2 impressoras × 20 h; 1 pessoa × 6 h).
+- **Capacidade diária** definida pelo gargalo: o menor resultado entre os recursos de *horas disponíveis ÷ tempo por unidade*.
+- **Custo por hora de recurso** (Pro): energia da máquina e mão de obra calculadas a partir do tempo, alimentando os custos adicionais e a margem automaticamente.
+- Usos: quantos itens por dia ou semana, prazo estimado para encomendas, alerta de pedidos acima da capacidade.
+
+**Exemplo — capacidade do vaso impresso**
+
+| Recurso | Disponível por dia | Tempo por vaso | Vasos possíveis |
+|---|---|---|---|
+| Impressoras (2 × 20 h) | 40 h | 3 h de máquina | 13 |
+| Pessoa (1 × 6 h) | 6 h | 20 min ativos | 18 |
+| **Capacidade (gargalo: impressoras)** | | | **13 por dia** |
+
+---
+
+## 9. Plataforma: console interno e CRM de assinantes
+
+### 9.1 Separação e segurança
+
+- **Aplicação própria** (`admin/`) e rotas próprias (`/api/v1/plataforma/...`).
+- **Operadores** (equipe interna) em tabela própria, sem relação com os usuários dos assinantes.
+- **MFA obrigatório** e papéis internos (administrador, suporte, financeiro, comercial) com permissões próprias.
+- **Auditoria da plataforma** em toda ação: quem, o quê, em qual empresa e com qual motivo.
+- **Acesso do suporte aos dados de negócio** do assinante somente com liberação temporária feita pelo próprio assinante, somente leitura por padrão, e registrado também na auditoria da empresa.
+
+### 9.2 Gestão de assinantes
+
+- **Ficha do assinante:** empresa, dono e contatos, documento, plano, status, trial, datas, uso versus limites, última atividade, dispositivos e canais conectados.
+- **Ações:** trocar plano, estender trial, conceder carência, aplicar desconto ou cortesia, suspender e reativar.
+- **Ajustes por empresa:** liberar um recurso ou alterar um limite para uma empresa específica, com validade e motivo, aplicados pelo motor de planos.
+
+### 9.3 Cobrança e integração com a fintech
+
+- Módulo `pagamentos` com **interface genérica e um adaptador por provedor**.
+- Operações: cadastrar cliente, criar, alterar e cancelar assinatura, gerar cobrança, segunda via e estorno.
+- **Webhooks idempotentes** processados em segundo plano, com registro dos eventos recebidos.
+- **Faturas e pagamentos espelhados no banco**, com o identificador do provedor, para consulta e relatórios.
+- Pagamento pelo checkout do provedor; **dados de cartão nunca passam pelo sistema**.
+- **Régua de cobrança:** lembrete antes do vencimento, aviso de atraso, carência e suspensão.
+- Cupons e descontos **da assinatura do SaaS**, separados dos cupons que os lojistas criam para os clientes deles.
+
+### 9.4 CRM
+
+- **Funil do assinante:** lead → trial → pagante → em risco → cancelado → reativado.
+- **Linha do tempo** por assinante, reunindo interações da equipe (notas, ligações, e-mails, reuniões) e eventos do sistema (cadastro, upgrade, falha de pagamento).
+- Tarefas e lembretes para a equipe; tags e segmentos.
+- **Motivo de cancelamento** obrigatório e pesquisa de saída.
+- **Saúde da conta:** uso recente, recursos ativados, falhas de pagamento e chamados, compondo um indicador de risco de cancelamento.
+- Avisos dentro do sistema e comunicados segmentados por plano, uso ou situação.
+
+### 9.5 Métricas do negócio
+
+- Receita recorrente mensal (MRR) e anual (ARR), com novos, expansão, contração e perdas.
+- Churn de clientes e de receita, conversão do trial em pagante, receita média por conta (ARPA), valor do cliente ao longo do tempo (LTV) e coortes.
+- Uso de cada recurso por plano, para entender o que de fato leva ao upgrade.
+
+### 9.6 Construir ou integrar
+
+- **Construir:** tudo que depende dos dados do sistema — assinaturas, ajustes, cobrança, saúde da conta, suporte e métricas.
+- **Avaliar integração** com ferramentas de mercado para a parte de vendas antes do cadastro (captação de leads, e-mail marketing), em vez de reconstruir o que já existe.
+
+---
+
+## 10. Ambientes e fluxo de deploy
+
+### 10.1 Ambientes
 
 | Ambiente | Para quê | Backend e worker | Banco | Frontend e vitrine |
 |---|---|---|---|---|
@@ -311,7 +433,7 @@ Classificação pelo método **RFM**: **R**ecência (há quanto tempo comprou), 
 
 A troca entre ambientes é feita só por variáveis (ex. `DATABASE_URL`), nunca por mudança de código.
 
-### 8.2 Fluxo de branches
+### 10.2 Fluxo de branches
 
 ```
 feature/<nome>  →  develop  →  main
@@ -322,7 +444,7 @@ feature/<nome>  →  develop  →  main
 2. Pull Request para `develop` → deploy automático em staging → teste manual.
 3. Merge de `develop` em `main` → deploy automático em produção.
 
-### 8.3 Regras
+### 10.3 Regras
 
 - **Staging e produção nunca compartilham banco.**
 - **Migrações sempre passam pelo staging antes da produção.**
@@ -340,12 +462,14 @@ feature/<nome>  →  develop  →  main
 
 ---
 
-## 9. Fases de desenvolvimento
+## 11. Fases de desenvolvimento
 
 > **Mudanças em relação ao rascunho inicial:**
 > - O *motor de planos* sobe para a Fase 1, porque quase todos os módulos dependem dele. A *cobrança* com Asaas fica na Fase 7.
 > - O *PDV offline* entra como Fase 4, logo após o PDV online.
-> - *Clientes, cupons e fidelidade* (Fase 8), *vitrine* (Fase 9) e *marketplaces* (Fase 10) entram depois das assinaturas, com o núcleo validado. As bases que eles exigem (SKU, dados públicos, reserva de estoque, cliente, canal, descontos e taxas na venda) já entram nas Fases 2 e 3.
+> - O *console da plataforma* nasce junto com a cobrança (Fase 7), porque ninguém deve cobrar assinantes sem conseguir gerenciá-los. O *CRM completo e as métricas* vêm logo depois (Fase 8).
+> - *Unidades fracionadas, insumos e tempo de preparo* entram na Fase 2, porque mudam o modelo de estoque e de composição desde o início.
+> - *Clientes, cupons e fidelidade* (Fase 9), *vitrine* (Fase 10) e *marketplaces* (Fase 11) entram depois das assinaturas, com o núcleo validado. As bases que eles exigem (SKU, dados públicos, reserva de estoque, cliente, canal, descontos e taxas na venda) já entram nas Fases 2 e 3.
 
 ### Fase 0 — Setup do projeto e ambientes
 **Código e ambiente local**
@@ -385,28 +509,32 @@ feature/<nome>  →  develop  →  main
 - Permissões fora do token: consultadas a cada requisição (com cache curto) para revogação imediata.
 
 **Tabelas**
-- [ ] `usuarios` (global), `empresas` (com `slug` e fuso horário), `membros` (status ativo, convidado, desativado)
-- [ ] `papeis` e `papel_permissoes`
-- [ ] `planos`, `plano_regras` (recursos e limites) e `assinaturas`
-- [ ] `sessoes` (token de renovação guardado como hash), `dispositivos`, `convites` e `auditoria`
+- [x] `usuarios` (global), `empresas` (com `slug` e fuso horário), `membros` (status ativo, convidado, desativado)
+- [x] `papeis` e `papel_permissoes`
+- [x] `planos`, `plano_regras` (recursos e limites) e `assinaturas`
+- [x] `sessoes` (token de renovação guardado como hash)
+- [ ] `dispositivos`, `convites` e `auditoria`
 
 **Funcionalidades**
-- [ ] Primeira migração e execução de migrações no staging
-- [ ] Cadastro de conta criando empresa, papéis padrão e assinatura Pro em trial
-- [ ] Login com escolha de empresa quando o usuário pertence a mais de uma
-- [ ] Token de acesso curto e token de renovação rotativo e revogável
-- [ ] "Sair de todos os dispositivos" e revogação imediata de membros desativados
+- [x] Primeira migração e execução de migrações no staging
+- [x] Cadastro de conta criando empresa, papéis padrão e assinatura Pro em trial
+- [x] Login com escolha de empresa quando o usuário pertence a mais de uma
+- [x] Token de acesso curto e token de renovação rotativo e revogável, com revogação por reuso
+- [x] "Sair de todos os dispositivos" e revogação imediata de membros desativados
 - [ ] Limite de tentativas de login
-- [ ] Isolamento multi-tenant automático (empresa sempre vinda do token, filtro na camada base)
-- [ ] Registro de outra empresa retorna "não encontrado"
+- [x] Empresa sempre vinda da sessão validada (`obter_contexto`)
+- [ ] Filtro automático de `empresa_id` na camada base dos repositórios
+- [x] Registro de outra empresa retorna "não encontrado"
 - [ ] Testes automatizados de isolamento entre empresas (obrigatórios em cada módulo novo)
-- [ ] Catálogo de permissões por módulo (incluindo `produtos.ver_custo`, `clientes.ver`, `clientes.editar`, `vendas.desconto_acima_limite`)
+- [x] Catálogo de permissões por módulo, validado na inicialização
+- [ ] Permissões dos próximos módulos (`produtos.ver_custo`, `clientes.ver`, `clientes.editar`, `vendas.desconto_acima_limite`) junto com cada módulo
 - [ ] Papéis fixos (Base) e papéis editáveis (Pro)
-- [ ] **Motor de planos:** helpers `requer_recurso(...)` e `verificar_limite(...)`
-- [ ] Trial reverso: empresa nova nasce com Pro por 14 dias
+- [x] **Motor de planos:** plano efetivo, `requer_recurso(...)`, `requer_permissao(...)` e `verificar_limite(...)`
+- [x] Trial reverso: empresa nova nasce com Pro por 14 dias
 - [ ] Convites por e-mail com link de validade limitada
 - [ ] Auditoria de ações sensíveis (permissões, membros, assinatura)
 - [ ] Estrutura de recuperação de senha e verificação de e-mail (envio real depende do provedor de e-mail)
+- [ ] Telas de cadastro, login e escolha de empresa no frontend (Next.js como intermediário, tokens em cookie protegido)
 
 ### Fase 2 — Produtos e estoque (coração do sistema)
 - [ ] Produto simples (preço, custo, campos fiscais previstos)
@@ -424,6 +552,21 @@ feature/<nome>  →  develop  →  main
 - [ ] Saldo negativo permitido para vendas sincronizadas e de marketplaces, com alerta
 - [ ] Aplicação dos limites de plano (produtos e compostos)
 
+**Unidades e insumos (seção 8.1 e 8.2)**
+- [ ] Unidade de estoque por produto, com quantidades decimais em todo o modelo
+- [ ] Conversões fixas entre unidades da mesma grandeza
+- [ ] Unidades alternativas de compra e de venda por produto, com fator de conversão
+- [ ] Produto vendável e/ou insumo
+- [ ] Composição com quantidades fracionadas e custo proporcional
+- [ ] Baixa da fração exata de cada insumo na venda e na montagem
+- [ ] Perda percentual por componente — Pro
+
+**Tempo de preparo e produção (seção 8.3)**
+- [ ] Tempo ativo e tempo de máquina, por unidade ou por lote com rendimento
+- [ ] Tempo total de compostos a partir dos componentes produzidos internamente
+- [ ] Recursos produtivos (pessoas e máquinas) com horas disponíveis por dia — Pro
+- [ ] Custo por hora de recurso alimentando custos adicionais e margem — Pro
+
 ### Fase 3 — PDV e vendas (online)
 - [ ] Tela de PDV
 - [ ] Venda com baixa de estoque (inclusive componentes de kits)
@@ -434,6 +577,7 @@ feature/<nome>  →  develop  →  main
 - [ ] Endpoint de venda idempotente
 - [ ] Datas `ocorrido_em` e `registrado_em`
 - [ ] Formas de pagamento
+- [ ] Venda fracionada (peso, volume, comprimento) e em unidades alternativas no PDV
 - [ ] Preço de tabela, desconto e preço final separados na venda
 - [ ] Limite de desconto por papel, com autorização acima do limite
 - [ ] **Cadastro de clientes** (seção 7.1), com UUID gerado no dispositivo
@@ -467,20 +611,47 @@ feature/<nome>  →  develop  →  main
 - [ ] Vendas e margem por canal (Pro)
 - [ ] Relatórios de clientes: ticket médio, recorrência, novos vs. recorrentes (Pro)
 - [ ] Impacto de descontos na margem (Pro)
+- [ ] Capacidade de produção diária e semanal, com gargalo identificado (Pro)
+- [ ] Alerta de demanda acima da capacidade (Pro)
+- [ ] Consumo e perdas de insumos no período (Pro)
 - [ ] Gráficos completos e exportação (Pro)
 - [ ] Alertas de estoque baixo, estoque negativo e margem caindo (Pro)
 - [ ] Avisos contextuais de upgrade com dados reais (Base)
 - [ ] Aviso de proximidade de limite
 
-### Fase 7 — Assinaturas e cobrança
-- [ ] Integração com Asaas (checkout e webhooks)
+### Fase 7 — Assinaturas, cobrança e console da plataforma
+
+**Cobrança (seção 9.3)**
+- [ ] Módulo `pagamentos` com interface genérica e adaptador do provedor escolhido
+- [ ] Checkout pelo provedor, sem dados de cartão no sistema
+- [ ] Webhooks idempotentes em segundo plano, com registro dos eventos
+- [ ] Faturas e pagamentos espelhados no banco
+- [ ] Régua de cobrança (lembrete, atraso, carência, suspensão)
 - [ ] Planos mensal e anual (com desconto)
 - [ ] Transições de estado: trial → ativa → inadimplente → cancelada
 - [ ] Período de carência por inadimplência
 - [ ] Fluxo de downgrade: compostos, caixas offline, vitrine, marketplaces, cupons e fidelidade (seção 4.3)
 - [ ] Reativação automática ao voltar para o Pro
 
-### Fase 8 — Clientes: cupons, fidelidade e campanhas
+**Console da plataforma (seções 9.1 e 9.2)**
+- [ ] Aplicação `admin/` e rotas `/api/v1/plataforma`, com operadores separados, papéis internos e MFA
+- [ ] Auditoria da plataforma
+- [ ] Ficha do assinante: dados, plano, status, uso versus limites e última atividade
+- [ ] Ações: trocar plano, estender trial, conceder carência, cortesia, suspender e reativar
+- [ ] **Ajustes por empresa** no motor de planos, com validade e motivo
+- [ ] Liberação temporária de acesso do suporte pelo assinante
+
+### Fase 8 — CRM da plataforma e métricas
+- [ ] Funil do assinante e linha do tempo de interações e eventos (seção 9.4)
+- [ ] Tarefas, lembretes, tags e segmentos
+- [ ] Motivo de cancelamento e pesquisa de saída
+- [ ] Saúde da conta e indicador de risco de cancelamento
+- [ ] Métricas: MRR, ARR, churn, conversão do trial, ARPA, LTV e coortes (seção 9.5)
+- [ ] Uso de recursos por plano
+- [ ] Avisos dentro do sistema e comunicados segmentados
+- [ ] Cupons e descontos da assinatura do SaaS
+
+### Fase 9 — Clientes: cupons, fidelidade e campanhas
 - [ ] Cupons com regras de validade, valor mínimo, produtos, canais e limites (seção 7.4)
 - [ ] Cupons com limite de uso apenas online; sem limite também offline
 - [ ] Alerta de cupom que leva a venda abaixo do custo
@@ -492,7 +663,7 @@ feature/<nome>  →  develop  →  main
 - [ ] Campanhas: bonificar segmento com cashback, gerar cupom exclusivo, exportar lista para contato
 - [ ] Respeito ao consentimento de marketing e exclusão de clientes de marketplaces
 
-### Fase 9 — Vitrine online
+### Fase 10 — Vitrine online
 - [ ] Aplicação `loja/` no monorepo, publicada na Vercel
 - [ ] API pública separada, somente leitura, com limite de requisições
 - [ ] Página da loja e página de produto, otimizadas para busca (SEO)
@@ -500,13 +671,14 @@ feature/<nome>  →  develop  →  main
 - [ ] Aplicação de cupons na vitrine
 - [ ] Identificação do cliente pelo telefone, ligando o pedido ao cadastro
 - [ ] Pedido pendente com reserva de estoque e expiração
+- [ ] Prazo estimado de produção para itens sob encomenda, a partir da capacidade
 - [ ] Confirmação do pedido no ERP (vira venda com canal "vitrine")
 - [ ] Endereço padrão por loja
 - [ ] Domínio próprio (Pro)
 - [ ] Limite de produtos publicados por plano
 - [ ] Textos e campos de apoio às obrigações legais
 
-### Fase 10 — Marketplaces (etapa 1: vincular e sincronizar)
+### Fase 11 — Marketplaces (etapa 1: vincular e sincronizar)
 - [ ] Módulo `canais` com interface genérica e adaptadores
 - [ ] Worker de tarefas em segundo plano (serviço separado)
 - [ ] Credenciais criptografadas e renovação automática de acesso
@@ -520,7 +692,7 @@ feature/<nome>  →  develop  →  main
 - [ ] Tratamento separado de anúncios em fulfillment
 - [ ] Painel de status da integração (última sincronização, erros, autorização expirada)
 
-### Fase 11 — Fiscal (futuro)
+### Fase 12 — Fiscal (futuro)
 - [ ] Entrada de notas (XML de compra → movimentação de estoque)
 - [ ] Emissão de NF-e / NFC-e
 - [ ] NFC-e em contingência offline, integrada à fila de sincronização
@@ -529,6 +701,10 @@ feature/<nome>  →  develop  →  main
 
 ### Evoluções futuras
 - [ ] Segundo marketplace (novo adaptador)
+- [ ] Fila e ordens de produção para encomendas
+- [ ] Integração com balança no PDV
+- [ ] Pesquisa de satisfação (NPS) dos assinantes
+- [ ] Integração com ferramenta externa de CRM de vendas, se decidido
 - [ ] Fidelidade por pontos com catálogo de recompensas
 - [ ] Envio automático de campanhas por WhatsApp ou e-mail
 - [ ] Marketplaces etapa 2: criar e editar anúncios pelo ERP
@@ -536,14 +712,14 @@ feature/<nome>  →  develop  →  main
 
 ---
 
-## 10. Estrutura de pastas (referência)
+## 12. Estrutura de pastas (referência)
 
 ```
 erp/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py            # API
-│   │   ├── worker.py          # tarefas em segundo plano (Fase 9)
+│   │   ├── worker.py          # tarefas em segundo plano (a partir da Fase 7)
 │   │   ├── core/              # config, database, security, tenancy, permissions, plans, exceptions
 │   │   ├── shared/            # models base, money, pagination
 │   │   └── modules/
@@ -551,7 +727,8 @@ erp/
 │   │       ├── empresas/
 │   │       ├── usuarios/
 │   │       ├── dispositivos/
-│   │       ├── produtos/
+│   │       ├── produtos/      # inclui unidades de medida e composição
+│   │       ├── producao/      # tempo de preparo, recursos e capacidade
 │   │       ├── estoque/
 │   │       ├── vendas/
 │   │       ├── clientes/
@@ -560,6 +737,9 @@ erp/
 │   │       ├── financeiro/
 │   │       ├── relatorios/
 │   │       ├── assinaturas/
+│   │       ├── pagamentos/
+│   │       │   └── adaptadores/   # um por provedor de pagamento
+│   │       ├── plataforma/    # operadores, console, CRM e métricas
 │   │       ├── auditoria/
 │   │       ├── vitrine/       # rotas públicas da loja
 │   │       ├── canais/
@@ -574,7 +754,9 @@ erp/
 │       ├── components/ui/
 │       └── lib/
 │           └── offline/       # banco local, fila de pendências, sincronização (Fase 4)
-└── loja/                      # vitrine pública (Fase 8)
+├── loja/                      # vitrine pública (Fase 10)
+│   └── src/
+└── admin/                     # console da plataforma (Fase 7)
     └── src/
 ```
 
