@@ -26,9 +26,10 @@ def catalogo() -> dict[str, Permissao]:
     from app.modules.acesso.permissions import PERMISSOES as acesso
     from app.modules.assinaturas.permissions import PERMISSOES as assinaturas
     from app.modules.empresas.permissions import PERMISSOES as empresas
+    from app.modules.produtos.permissions import PERMISSOES as produtos
 
     resultado: dict[str, Permissao] = {}
-    for permissao in (*acesso, *assinaturas, *empresas):
+    for permissao in (*acesso, *assinaturas, *empresas, *produtos):
         if not FORMATO_CODIGO.match(permissao.codigo):
             raise RuntimeError(f"Código de permissão inválido: {permissao.codigo}")
         if permissao.codigo in resultado:

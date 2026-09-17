@@ -35,20 +35,31 @@ PAPEIS_PADRAO: tuple[PapelPadrao, ...] = (
         nome="Gerente",
         descricao="Gestão do dia a dia, sem assinatura e papéis",
         protegido=False,
-        permissoes=frozenset({"membros.ver", "membros.gerenciar", "empresa.editar", "assinatura.ver"}),
+        permissoes=frozenset(
+            {
+                "membros.ver",
+                "membros.gerenciar",
+                "empresa.editar",
+                "assinatura.ver",
+                "produtos.ver",
+                "produtos.editar",
+                "produtos.ver_custo",
+            }
+        ),
     ),
     PapelPadrao(
         codigo="caixa",
         nome="Caixa",
         descricao="Vendas e caixa do dia",
         protegido=False,
-        permissoes=frozenset(),  # recebe permissões quando o PDV existir
+        # Vê produtos e preços, mas não custo nem margem
+        permissoes=frozenset({"produtos.ver"}),
     ),
     PapelPadrao(
         codigo="estoquista",
         nome="Estoquista",
         descricao="Produtos e movimentações de estoque",
         protegido=False,
-        permissoes=frozenset(),  # recebe permissões quando produtos e estoque existirem
+        permissoes=frozenset({"produtos.ver", "produtos.editar", "produtos.ver_custo"}),
     ),
 )
