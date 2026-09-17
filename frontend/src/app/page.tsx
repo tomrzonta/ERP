@@ -1,8 +1,8 @@
 import Link from "next/link";
 
+import { Cabecalho } from "@/components/cabecalho";
 import { chamarApi } from "@/lib/server/api";
 import { carregarDaSessao } from "@/lib/server/sessao";
-import { BotaoSair } from "@/modules/auth/components/botao-sair";
 import type { Eu } from "@/modules/auth/types";
 
 type Health = { api: string; banco: string; ambiente: string };
@@ -12,35 +12,25 @@ export default async function PainelPage() {
   const health = await chamarApi<Health>("/health").catch(() => null);
 
   return (
-    <main className="min-h-screen bg-[#f7f8f8]">
-      <header className="border-b border-[#dbe1e4] bg-white">
-        <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-6 py-4">
-          <div>
-            <p className="font-semibold tracking-tight text-[#16222b]">{eu.empresa.nome}</p>
-            <p className="text-sm text-[#5b6b75]">
-              {eu.usuario.nome} · {eu.papel}
-            </p>
-          </div>
-          <div className="flex items-center gap-4">
-            <Link
-              href="/escolher-empresa"
-              className="text-sm text-[#5b6b75] underline decoration-[#dbe1e4] underline-offset-4 transition-colors hover:text-[#16222b]"
-            >
-              Trocar negócio
-            </Link>
-            <BotaoSair />
-          </div>
-        </div>
-      </header>
-
-      <div className="mx-auto max-w-3xl px-6 py-12">
+    <>
+      <Cabecalho eu={eu} />
+      <main className="mx-auto max-w-5xl px-6 py-12">
         <h1 className="text-2xl font-semibold tracking-tight text-[#16222b]">
           Tudo pronto para começar
         </h1>
         <p className="mt-2 max-w-prose text-sm text-[#5b6b75]">
-          Sua conta está no plano {eu.plano === "pro" ? "Pro" : "Base"}. O cadastro de produtos é
-          o próximo passo do sistema.
+          Sua conta está no plano {eu.plano === "pro" ? "Pro" : "Base"}. Cadastre seus produtos e
+          insumos; o controle de estoque é o próximo passo do sistema.
         </p>
+
+        <div className="mt-8">
+          <Link
+            href="/produtos"
+            className="rounded-md bg-[#0f6d5c] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#0b564a]"
+          >
+            Ir para produtos
+          </Link>
+        </div>
 
         <dl className="mt-10 grid gap-px overflow-hidden rounded-lg border border-[#dbe1e4] bg-[#dbe1e4] sm:grid-cols-3">
           {[
@@ -54,7 +44,7 @@ export default async function PainelPage() {
             </div>
           ))}
         </dl>
-      </div>
-    </main>
+      </main>
+    </>
   );
 }
