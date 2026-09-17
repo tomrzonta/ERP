@@ -8,4 +8,5 @@ from app.modules.acesso import models as acesso_models  # noqa: F401
 from app.modules.assinaturas import models as assinaturas_models  # noqa: F401
 from app.modules.auth import models as auth_models  # noqa: F401
 from app.modules.empresas import models as empresas_models  # noqa: F401
+from app.modules.produtos import models as produtos_models  # noqa: F401
 from app.modules.usuarios import models as usuarios_models  # noqa: F401
