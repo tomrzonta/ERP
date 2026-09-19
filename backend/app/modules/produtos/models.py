@@ -60,7 +60,8 @@ class Categoria(UUIDMixin, EmpresaMixin, TimestampMixin, Base):
 
 class TipoProduto(StrEnum):
     SIMPLES = "simples"
-    COMPOSTO = "composto"
+    # Tem saldo próprio; a montagem dá baixa nos componentes e credita o kit
+    KIT = "kit"
 
 
 class StatusProduto(StrEnum):
@@ -103,6 +104,8 @@ class Produto(UUIDMixin, EmpresaMixin, TimestampMixin, Base):
     custo_medio: Mapped[Decimal] = mapped_column(Numeric(18, 6), default=Decimal("0"))
     custo_ultima_compra: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
 
+    # Abaixo (ou igual) disso, o saldo disponível gera alerta de estoque baixo.
+    estoque_minimo: Mapped[Decimal | None] = mapped_column(Numeric(18, 4))
     codigo_barras: Mapped[str | None] = mapped_column(String(20), index=True)
     descricao: Mapped[str | None] = mapped_column(String(500))
 
@@ -134,3 +137,20 @@ class ProdutoUnidade(UUIDMixin, TimestampMixin, Base):
     fator: Mapped[Decimal] = mapped_column(Numeric(18, 6))
     usa_na_compra: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
     usa_na_venda: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+
+
+class CustoAdicionalProduto(UUIDMixin, TimestampMixin, Base):
+    """Custo extra por unidade produzida (embalagem, energia, mão de obra) — Pro.
+
+    Some ao custo_medio na hora de calcular o custo total e a margem. Sem
+    `empresa_id` própria — é escopada pelo produto, igual `ProdutoUnidade`.
+    """
+
+    __tablename__ = "custos_adicionais_produto"
+    __table_args__ = (UniqueConstraint("produto_id", "nome"),)
+
+    produto_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("produtos.id", ondelete="CASCADE"), index=True
+    )
+    nome: Mapped[str] = mapped_column(String(60))
+    valor: Mapped[Decimal] = mapped_column(Numeric(18, 6))

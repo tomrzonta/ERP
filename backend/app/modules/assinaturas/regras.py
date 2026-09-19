@@ -16,7 +16,6 @@ DIAS_TRIAL = 14
 
 class Recurso(StrEnum):
     CUSTOS_ADICIONAIS = "custos_adicionais"
-    COMPOSTO_MONTADO = "composto_montado"
     COMPOSTO_ANINHADO = "composto_aninhado"
     PAPEIS_EDITAVEIS = "papeis_editaveis"
     MARGEM_AVANCADA = "margem_avancada"
@@ -27,6 +26,10 @@ class Recurso(StrEnum):
     CUPONS = "cupons"
     FIDELIDADE = "fidelidade"
     SEGMENTACAO_CLIENTES = "segmentacao_clientes"
+    PERDA_NA_COMPOSICAO = "perda_na_composicao"
+    CONTAS_PAGAR_RECEBER = "contas_pagar_receber"
+    RELATORIOS_CLIENTES = "relatorios_clientes"
+    EXPORTACAO_RELATORIOS = "exportacao_relatorios"
 
 
 class Limite(StrEnum):

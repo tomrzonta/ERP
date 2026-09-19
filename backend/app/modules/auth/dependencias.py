@@ -11,6 +11,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from decimal import Decimal
 
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -45,6 +46,7 @@ class Contexto:
     papel_id: uuid.UUID
     papel_nome: str
     permissoes: frozenset[str]
+    limite_desconto_percentual: Decimal | None
 
 
 def obter_autenticado(
@@ -97,6 +99,7 @@ def obter_contexto(
         papel_id=acesso.papel.id,
         papel_nome=acesso.papel.nome,
         permissoes=acesso.permissoes,
+        limite_desconto_percentual=acesso.papel.limite_desconto_percentual,
     )
 
 

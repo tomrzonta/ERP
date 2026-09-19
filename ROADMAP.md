@@ -9,7 +9,7 @@
 
 Sistema de gestão simples para microempreendedores: produtos, PDV, estoque, financeiro e análises.
 
-**Diferencial:** produtos compostos com profundidade real — kits, produtos montados, composição aninhada, custos adicionais (filamento, energia, embalagem, mão de obra) e margem esperada vs. real.
+**Diferencial:** produtos compostos com profundidade real — kits com montagem e baixa automática, composição aninhada, custos adicionais (filamento, energia, embalagem, mão de obra) e margem esperada vs. real.
 
 **Continuidade:** o PDV continua vendendo e consultando preços mesmo sem internet, sincronizando quando a conexão volta.
 
@@ -17,7 +17,7 @@ Sistema de gestão simples para microempreendedores: produtos, PDV, estoque, fin
 
 **Relacionamento com clientes:** cadastro com histórico de compras, cupons, fidelidade e campanhas para quem já compra, respeitando a LGPD.
 
-**Produção artesanal e insumos:** produtos e insumos em frações (gramas, mililitros, fatias), tempo de preparo e capacidade de produção por dia.
+**Produção artesanal e insumos:** produtos e insumos em frações (gramas, mililitros, fatias).
 
 **Operação do próprio SaaS:** console interno com gestão de assinantes, cobrança integrada à fintech e CRM com métricas do negócio.
 
@@ -84,17 +84,14 @@ Sistema de gestão simples para microempreendedores: produtos, PDV, estoque, fin
 | Recurso | Base (operar) | Pro (gerir e crescer) |
 |---|---|---|
 | Produtos simples | Até 200 | Ilimitado |
-| Produto composto | Kit simples (só produtos), até 5 | Ilimitado |
+| Kit (componentes + montagem, dá baixa e credita saldo próprio) | Até 5 | Ilimitado |
 | Custos adicionais (filamento, energia, embalagem, mão de obra) | — | ✓ |
-| Composto montado (baixa de componentes na montagem) | — | ✓ |
-| Composto dentro de composto | — | ✓ |
+| Kit dentro de kit | — | ✓ |
 | Margem | Margem simples do produto | Esperada vs. real, histórico, por venda |
 | PDV e baixa de estoque | ✓ | ✓ |
 | Unidades fracionadas (g, kg, ml, l, m) e unidades alternativas (caixa, fatia) | ✓ | ✓ |
 | Insumos e composição com quantidades fracionadas | ✓ | ✓ |
 | Perda percentual por componente | — | ✓ |
-| Tempo de preparo do produto | ✓ | ✓ |
-| Recursos produtivos, capacidade diária e custo por hora | — | ✓ |
 | PDV offline | 1 caixa | Vários caixas simultâneos |
 | Vitrine online com pedido via WhatsApp | Produtos publicados limitados, endereço padrão | Ilimitado, domínio próprio |
 | Integração com marketplaces | — | ✓ |
@@ -141,7 +138,7 @@ Recursos exclusivos do Pro ficam somente leitura enquanto o cliente estiver no B
 
 | Tipo | Exemplos |
 |---|---|
-| Recursos (liga/desliga) | `custos_adicionais`, `composto_montado`, `composto_aninhado`, `papeis_editaveis`, `margem_avancada`, `alertas`, `marketplaces`, `dominio_proprio`, `margem_por_canal`, `cupons`, `fidelidade`, `segmentacao_clientes`, `perda_na_composicao`, `capacidade_producao` |
+| Recursos (liga/desliga) | `custos_adicionais`, `composto_aninhado`, `papeis_editaveis`, `margem_avancada`, `alertas`, `marketplaces`, `dominio_proprio`, `margem_por_canal`, `cupons`, `fidelidade`, `segmentacao_clientes`, `perda_na_composicao` |
 | Limites (numéricos) | `max_produtos_simples = 200`, `max_compostos = 5`, `max_usuarios = 2`, `max_caixas_offline = 1`, `max_produtos_vitrine` |
 | Estado da assinatura | `trial` · `ativa` · `inadimplente` · `cancelada` |
 | Ajustes por empresa | Recurso liberado ou limite alterado para uma empresa específica, com validade e motivo, sobrepondo as regras do plano |
@@ -154,13 +151,15 @@ Pagamento em atraso **não bloqueia no mesmo dia**: há um período de carência
 - [ ] Duração do teste reverso (14 dias provisório)
 - [ ] Duração da carência por inadimplência
 - [ ] Preços mensal e anual de cada plano
-- [ ] Tempo máximo de operação offline (48 a 72 horas em avaliação)
+- [x] Tempo máximo de operação offline — decidido não ter limite por
+      enquanto (Fase 4 Bloco 1); revisar quando houver uso real pra calibrar
 - [ ] Limite de produtos publicados na vitrine do Base
 - [ ] Primeiro marketplace a integrar (decidir com base em onde os primeiros clientes vendem)
 - [ ] Ferramenta de tarefas em segundo plano
 - [ ] Provedor de envio de e-mails (recuperação de senha, verificação, convites) — escolher antes do beta
 - [ ] Política de anonimização de clientes e prazos de guarda de dados (validar com assessoria jurídica)
-- [ ] Limites de desconto padrão por papel
+- [x] Limites de desconto padrão por papel — Caixa 10%, Gerente e Dono sem
+      limite (Fase 3 Bloco 2); ainda só ajustável no banco, sem tela
 - [ ] Região de produção: manter Render + Supabase nos EUA ou migrar API e banco juntos para São Paulo (decidir com medições reais antes dos primeiros clientes)
 - [ ] Fintech de pagamentos (Asaas é candidata; escolher antes da Fase 7)
 - [ ] CRM de vendas para leads antes do cadastro: construir ou integrar ferramenta de mercado
@@ -335,41 +334,25 @@ Classificação pelo método **RFM**: **R**ecência (há quanto tempo comprou), 
 
 ### 8.2 Insumos e composição fracionada
 
-- O produto pode ser **vendável**, **insumo** ou os dois. Insumo não vendável (filamento, terra) não aparece no PDV nem na vitrine.
+- O produto pode ser **vendável**, **insumo** ou os dois — os dois ao mesmo tempo é normal (ex. um vaso vendido solto e também usado como componente de outro kit); não precisa cadastrar duas vezes.
 - Cada componente da composição tem **quantidade fracionada** na unidade dele, e o custo é proporcional.
-- A venda de um composto dá baixa **exatamente na fração consumida** de cada insumo, nunca em uma unidade inteira.
-- Disponibilidade de kit: menor resultado entre os componentes de *saldo ÷ quantidade por kit*, arredondado para baixo.
-- **Perda percentual por componente** (Pro): ex. 5% de filamento em suportes e falhas de impressão, somada ao consumo e ao custo.
+- Kit tem saldo próprio; a **montagem** dá baixa **exatamente na fração consumida** de cada componente, nunca em uma unidade inteira, e credita o saldo do kit com o custo do que foi consumido. Kit dentro de kit é permitido, com bloqueio de ciclo.
+- A venda de um kit (quando a Fase 3 existir) desconta do saldo dele como qualquer produto — a baixa nos componentes já aconteceu na montagem, não na venda.
+- **Perda percentual por componente** (Pro): ex. 5% de filamento em suportes e falhas de impressão, somada ao consumo e ao custo — só entra na montagem, nunca é descontada do saldo do kit antes disso.
 - Venda fracionada no PDV (ex. 0,350 kg); integração com balança como evolução futura.
 
 **Exemplo — Vaso impresso com suculenta**
 
-| Componente | Unidade base | Quantidade no composto | Baixa por venda |
+| Componente | Unidade base | Quantidade no composto | Baixa na montagem |
 |---|---|---|---|
 | Filamento PLA | g | 85 g (+5% de perda no Pro) | 85 g (ou 89,25 g) |
 | Terra adubada | kg | 0,150 kg | 0,150 kg |
 | Suculenta | un | 1 | 1 un |
 | Embalagem | un | 1 | 1 un |
 
-### 8.3 Tempo de preparo e capacidade de produção
+### 8.3 Tempo de preparo e capacidade de produção — removido
 
-- **Tempo de preparo** por produto, separado em:
-  - **tempo ativo**: trabalho de uma pessoa (acabamento, montagem);
-  - **tempo de máquina**: recurso trabalhando sem atenção constante (impressão, forno).
-- Tempo **por unidade** ou **por lote com rendimento** (ex. fornada: 12 unidades em 40 minutos).
-- Compostos somam o tempo de montagem próprio aos tempos dos componentes produzidos internamente; componentes comprados prontos não contam.
-- **Recursos produtivos** (Pro): pessoas e máquinas, com quantidade e horas disponíveis por dia (ex. 2 impressoras × 20 h; 1 pessoa × 6 h).
-- **Capacidade diária** definida pelo gargalo: o menor resultado entre os recursos de *horas disponíveis ÷ tempo por unidade*.
-- **Custo por hora de recurso** (Pro): energia da máquina e mão de obra calculadas a partir do tempo, alimentando os custos adicionais e a margem automaticamente.
-- Usos: quantos itens por dia ou semana, prazo estimado para encomendas, alerta de pedidos acima da capacidade.
-
-**Exemplo — capacidade do vaso impresso**
-
-| Recurso | Disponível por dia | Tempo por vaso | Vasos possíveis |
-|---|---|---|---|
-| Impressoras (2 × 20 h) | 40 h | 3 h de máquina | 13 |
-| Pessoa (1 × 6 h) | 6 h | 20 min ativos | 18 |
-| **Capacidade (gargalo: impressoras)** | | | **13 por dia** |
+Decisão de 19/09/2026: atribuir tempo de máquina e de pessoa ficaria confuso demais para o usuário final. Tempo de preparo, recursos produtivos, capacidade diária e custo por hora foram retirados do escopo (código e tabelas removidos). Permanecem os **custos adicionais manuais** (energia, embalagem, mão de obra) como valor fixo por produto.
 
 ---
 
@@ -527,7 +510,7 @@ feature/<nome>  →  develop  →  main
 - [x] Registro de outra empresa retorna "não encontrado"
 - [ ] Testes automatizados de isolamento entre empresas (obrigatórios em cada módulo novo)
 - [x] Catálogo de permissões por módulo, validado na inicialização
-- [ ] Permissões dos próximos módulos (`produtos.ver_custo`, `clientes.ver`, `clientes.editar`, `vendas.desconto_acima_limite`) junto com cada módulo
+- [x] Permissões dos próximos módulos (`produtos.ver_custo`, `clientes.ver`, `clientes.editar`, `vendas.desconto_acima_limite`) junto com cada módulo
 - [ ] Papéis fixos (Base) e papéis editáveis (Pro)
 - [x] **Motor de planos:** plano efetivo, `requer_recurso(...)`, `requer_permissao(...)` e `verificar_limite(...)`
 - [x] Trial reverso: empresa nova nasce com Pro por 14 dias
@@ -537,87 +520,134 @@ feature/<nome>  →  develop  →  main
 - [ ] Telas de cadastro, login e escolha de empresa no frontend (Next.js como intermediário, tokens em cookie protegido)
 
 ### Fase 2 — Produtos e estoque (coração do sistema)
-- [ ] Produto simples (preço, custo, campos fiscais previstos)
-- [ ] **SKU único por empresa** (chave para vínculo com marketplaces)
-- [ ] Campos públicos previstos: publicado na vitrine, fotos, descrição pública, endereço amigável
+- [x] Produto simples (preço, custo, campos fiscais previstos)
+- [x] **SKU único por empresa** (chave para vínculo com marketplaces)
+- [ ] Campos públicos previstos: publicado na vitrine, fotos, descrição pública, endereço amigável (publicado/descrição prontos; fotos e endereço amigável não)
 - [ ] Upload de fotos (Supabase Storage)
-- [ ] Produto composto tipo **kit** (estoque calculado pelos componentes)
-- [ ] Produto composto **montado** (montagem dá baixa nos componentes e entrada no composto) — Pro
-- [ ] Composto dentro de composto, com bloqueio de ciclos — Pro
+- [x] Produto composto tipo **kit** — kit e "montado" viraram um tipo só: kit sempre tem saldo próprio, a montagem dá baixa nos componentes e credita o saldo dele (ver Decisões em aberto)
+- [x] Composto dentro de composto (kit dentro de kit), com bloqueio de ciclos — Pro
 - [ ] Custos adicionais por produto — Pro
-- [ ] Margem simples (Base) e margem esperada (Pro)
-- [ ] Status do produto: `ativo` / `congelado`
-- [ ] Estoque por movimentações (entrada, saída, ajuste, montagem)
-- [ ] Movimentações de **reserva** e **liberação** previstas no modelo
-- [ ] Saldo negativo permitido para vendas sincronizadas e de marketplaces, com alerta
-- [ ] Aplicação dos limites de plano (produtos e compostos)
+- [ ] Margem simples (Base) pronta; margem esperada vs. real (Pro) não
+- [ ] Status do produto: `ativo` / `congelado` — campo existe, mas nada ainda dispara o congelamento automático no downgrade
+- [x] Estoque por movimentações (entrada, saída, ajuste, montagem)
+- [x] Entrada e contagem rápidas por modal nas listas (Estoque, Produtos, Insumos), sem abrir a página do produto
+- [x] Movimentações de **reserva** e **liberação** previstas no modelo
+- [x] Saldo negativo permitido para vendas sincronizadas e de marketplaces, com alerta
+- [x] Aplicação dos limites de plano (produtos e kits)
 
 **Unidades e insumos (seção 8.1 e 8.2)**
-- [ ] Unidade de estoque por produto, com quantidades decimais em todo o modelo
-- [ ] Conversões fixas entre unidades da mesma grandeza
-- [ ] Unidades alternativas de compra e de venda por produto, com fator de conversão
-- [ ] Produto vendável e/ou insumo
-- [ ] Composição com quantidades fracionadas e custo proporcional
-- [ ] Baixa da fração exata de cada insumo na venda e na montagem
-- [ ] Perda percentual por componente — Pro
+- [x] Unidade de estoque por produto, com quantidades decimais em todo o modelo
+- [x] Conversões fixas entre unidades da mesma grandeza
+- [x] Unidades alternativas de compra e de venda por produto, com fator de conversão
+- [x] Produto vendável e/ou insumo
+- [x] Composição com quantidades fracionadas e custo proporcional
+- [x] Baixa da fração exata de cada componente na montagem — na venda ainda não existe (Fase 3)
+- [x] Perda percentual por componente — Pro
 
-**Tempo de preparo e produção (seção 8.3)**
-- [ ] Tempo ativo e tempo de máquina, por unidade ou por lote com rendimento
-- [ ] Tempo total de compostos a partir dos componentes produzidos internamente
-- [ ] Recursos produtivos (pessoas e máquinas) com horas disponíveis por dia — Pro
-- [ ] Custo por hora de recurso alimentando custos adicionais e margem — Pro
+**Tempo de preparo e produção (seção 8.3)** — removido do escopo (ver 8.3).
 
 ### Fase 3 — PDV e vendas (online)
-- [ ] Tela de PDV
-- [ ] Venda com baixa de estoque (inclusive componentes de kits)
-- [ ] Registro do preço e do custo no momento da venda em **todos os planos**
-- [ ] **Canal de origem** da venda (PDV, vitrine, marketplace)
+- [x] Tela de PDV — painel de tickets com status (aberto/fechado/cancelado),
+      filtro por status e detalhe do ticket selecionado ao lado, layout
+      inspirado no gerenciador de pedidos do iFood
+- [x] Venda com baixa de estoque — cada item **reserva** estoque ao ser
+      adicionado ao ticket aberto (evita vender o que não tem) e a reserva
+      só vira baixa de verdade no fechamento (pago); remover item ou
+      cancelar o ticket libera a reserva. Kit reserva e debita só o próprio
+      saldo — os componentes já foram debitados na montagem; não existe
+      mais baixa "nos componentes" na venda, diferente do texto original
+      deste item, por causa da unificação kit/montado da Fase 2 Etapa 3
+- [x] Registro do preço e do custo no momento da venda em **todos os planos**
+- [x] **Canal de origem** da venda (PDV, vitrine, marketplace) — só `pdv` é
+      aceito por enquanto; vitrine e marketplace são Fases 10/11
 - [ ] **Taxas do canal** na venda (comissão e frete)
-- [ ] UUID da venda e dos itens gerado no frontend
-- [ ] Endpoint de venda idempotente
-- [ ] Datas `ocorrido_em` e `registrado_em`
-- [ ] Formas de pagamento
-- [ ] Venda fracionada (peso, volume, comprimento) e em unidades alternativas no PDV
-- [ ] Preço de tabela, desconto e preço final separados na venda
-- [ ] Limite de desconto por papel, com autorização acima do limite
-- [ ] **Cadastro de clientes** (seção 7.1), com UUID gerado no dispositivo
-- [ ] Cliente opcional na venda, busca rápida por telefone ou nome
-- [ ] Histórico de compras na ficha do cliente e métricas por cliente
-- [ ] Mesclar clientes duplicados
-- [ ] Exportar, corrigir e anonimizar dados de clientes (LGPD)
-- [ ] Cancelamento de venda com estorno de estoque
-- [ ] Venda de compostos congelados até zerar o estoque
+- [x] UUID da venda gerado no frontend, com idempotência por venda (os itens
+      não têm UUID próprio do cliente — a deduplicação acontece no nível da
+      venda inteira, que já cobre reenvio)
+- [x] Endpoint de venda idempotente
+- [x] Datas `ocorrido_em` e `registrado_em`
+- [x] Formas de pagamento — dinheiro/cartão/pix, podendo dividir uma venda em
+      mais de uma forma
+- [x] Venda fracionada (peso, volume, comprimento) e em unidades alternativas no PDV
+- [x] Preço de tabela, desconto e preço final separados na venda
+- [x] Limite de desconto por papel, com autorização acima do limite — Caixa
+      10%, Gerente e Dono sem limite; ainda só ajustável no banco (sem tela
+      de papéis editáveis)
+- [x] **Cadastro de clientes** (seção 7.1), com UUID gerado no dispositivo
+- [x] Cliente opcional na venda, busca rápida por telefone ou nome — inclui
+      cadastro de cliente novo inline, direto no fluxo da venda
+- [x] Histórico de compras na ficha do cliente e métricas por cliente —
+      só conta vendas fechadas; métricas calculadas por agregação SQL
+- [x] Mesclar clientes duplicados — preenche no sobrevivente só os campos
+      vazios, reatribui as vendas do duplicado, nunca exclui (só marca
+      como mesclado e some da listagem)
+- [x] Exportar, corrigir e anonimizar dados de clientes (LGPD) — corrigir
+      já existia desde o Bloco 1; exportar baixa um `.json`; anonimizar
+      apaga dado pessoal mas mantém o registro e o vínculo com as vendas
+- [x] Cancelamento de venda com estorno de estoque — `TipoMovimento.ESTORNO`
+      novo; exige a permissão `vendas.cancelar` (Gerente e Dono, não
+      Caixa); não estorna pagamento (sem integração de reembolso ainda)
+- [x] Venda de compostos congelados até zerar o estoque
 
 ### Fase 4 — PDV offline
-- [ ] Frontend como PWA instalável
-- [ ] Cópia local de produtos, preços e estoque (IndexedDB)
-- [ ] Atualização periódica da cópia local enquanto online
-- [ ] Fila local de vendas, clientes novos e movimentações de caixa pendentes
-- [ ] Indicador de status (online, offline, pendências)
-- [ ] Sincronização automática ao reconectar
-- [ ] Tratamento de conflitos conforme seção 5.4
-- [ ] Sessão offline do último usuário, com tempo limite
+- [x] Frontend como PWA instalável — manifest + service worker mínimo
+      (só cacheia a página de fallback `/offline`, sem cache agressivo de
+      assets nem de API)
+- [x] Cópia local de produtos, preços e estoque (IndexedDB) — só leitura
+      por enquanto; ligada na página `/vendas`
+- [ ] Atualização periódica da cópia local enquanto online — hoje só
+      atualiza quando a página `/vendas` é carregada, não em intervalo
+- [x] Fila local de vendas pendentes — cliente novo inline já funciona
+      dentro da venda offline (mesmo padrão do PDV online); cliente
+      *existente* não dá pra buscar offline (não cacheamos a lista) e
+      movimentação de caixa avulsa (sem venda) ainda não existe
+- [x] Indicador de status (online, offline, pendências)
+- [x] Sincronização automática ao reconectar — em ordem, uma venda por
+      vez; erro de rede para e tenta tudo de novo na próxima reconexão
+      (sem duplicar); erro de negócio marca só aquele item e segue
+- [x] Tratamento de conflitos conforme seção 5.4 — venda offline não passa
+      pela reserva do PDV online (endpoint `POST /vendas/sincronizar`
+      separado), debita direto permitindo saldo negativo; preço de cada
+      item é o que o dispositivo tinha em cache, não o catálogo atual;
+      cancelar antes de sincronizar só remove da fila local
+- [x] Sessão offline do último usuário, com tempo limite — o service
+      worker já serve `/offline` pra qualquer navegação sem rede (não tem
+      "tela de login offline" separada porque não é necessária); usuário,
+      papel e permissões cacheados no dispositivo pra saber quem parece
+      estar logado e o que essa pessoa pode fazer, sem validar isso de
+      verdade (a validação real é sempre do servidor, na sincronização).
+      Tempo limite: decisão tomada de não ter limite por enquanto (falta
+      uso real pra calibrar) — o texto "offline há X" já aparece, sem
+      nenhum bloqueio
 - [ ] Limite de caixas offline por plano (1 no Base, vários no Pro)
+- [x] Fila pra entradas e saídas simples de caixa (seção 5.1) — entra no
+      caixa aberto na hora de sincronizar; sem caixa aberto, fica marcada
+      com o erro na fila
 
 ### Fase 5 — Financeiro
-- [ ] Caixa do dia: entradas e saídas (Base)
-- [ ] Contas a pagar e a receber (Pro)
-- [ ] Fluxo de caixa projetado (Pro)
-- [ ] Integração automática vendas → lançamentos (inclusive vendas sincronizadas)
+- [x] Caixa do dia: entradas e saídas (Base) — sessão de verdade (abre com
+      valor inicial, fecha com conferência); abrir não é obrigatório pra
+      vender, é oportunista: com caixa aberto, a venda vira lançamento; sem
+      caixa, a venda funciona igual e simplesmente não gera lançamento
+- [x] Contas a pagar e a receber (Pro) — sem integração com o caixa do dia
+- [x] Fluxo de caixa projetado (Pro) — resultado líquido das contas abertas, sem saldo inicial
+- [x] Integração automática vendas → lançamentos (inclusive vendas sincronizadas) —
+      cobre tanto o fechamento online quanto a sincronização offline
 
 ### Fase 6 — Relatórios, gráficos e alertas
-- [ ] Resumo básico (Base)
+- [x] Resumo básico (Base) — Painel (`/`, só administrador): faturamento, ticket médio, por dia, mais vendidos, formas de pagamento; lucro só com `produtos.ver_custo`
 - [ ] Margem esperada vs. real, histórico e por venda (Pro)
 - [ ] Vendas e margem por canal (Pro)
-- [ ] Relatórios de clientes: ticket médio, recorrência, novos vs. recorrentes (Pro)
-- [ ] Impacto de descontos na margem (Pro)
-- [ ] Capacidade de produção diária e semanal, com gargalo identificado (Pro)
-- [ ] Alerta de demanda acima da capacidade (Pro)
-- [ ] Consumo e perdas de insumos no período (Pro)
-- [ ] Gráficos completos e exportação (Pro)
-- [ ] Alertas de estoque baixo, estoque negativo e margem caindo (Pro)
-- [ ] Avisos contextuais de upgrade com dados reais (Base)
-- [ ] Aviso de proximidade de limite
+- [x] Relatórios de clientes: ticket médio, recorrência, novos vs. recorrentes (Pro) — bloco no Painel
+- [x] Impacto de descontos na margem (Pro) — bloco no Painel
+- [x] Consumo e perdas de insumos no período (Pro) — montagens + baixas por ajuste, no Painel
+- [x] Exportação em CSV das vendas (Pro) — botão no Painel
+- [x] Gráficos no Painel: colunas por dia, barras dos mais vendidos e roscas (pagamento, clientes)
+- [ ] Gráficos completos (Pro): linha de margem/lucro no tempo, comparação entre períodos
+- [x] Alertas de estoque baixo e estoque negativo (Pro) — no Painel, com `estoque_minimo` por produto
+- [ ] Alerta de margem caindo (Pro)
+- [x] Avisos contextuais de upgrade com dados reais (Base) — descontos concedidos, no Painel
+- [x] Aviso de proximidade de limite — produtos e kits, a partir de 80%
 
 ### Fase 7 — Assinaturas, cobrança e console da plataforma
 
@@ -671,7 +701,6 @@ feature/<nome>  →  develop  →  main
 - [ ] Aplicação de cupons na vitrine
 - [ ] Identificação do cliente pelo telefone, ligando o pedido ao cadastro
 - [ ] Pedido pendente com reserva de estoque e expiração
-- [ ] Prazo estimado de produção para itens sob encomenda, a partir da capacidade
 - [ ] Confirmação do pedido no ERP (vira venda com canal "vitrine")
 - [ ] Endereço padrão por loja
 - [ ] Domínio próprio (Pro)
@@ -728,7 +757,6 @@ erp/
 │   │       ├── usuarios/
 │   │       ├── dispositivos/
 │   │       ├── produtos/      # inclui unidades de medida e composição
-│   │       ├── producao/      # tempo de preparo, recursos e capacidade
 │   │       ├── estoque/
 │   │       ├── vendas/
 │   │       ├── clientes/

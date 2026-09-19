@@ -1,9 +1,10 @@
 import Link from "next/link";
 
-import { moeda, porcentagem } from "@/lib/formato";
 import { carregarDaSessao } from "@/lib/server/sessao";
 import { obterEu } from "@/modules/auth/eu";
-import type { Produto } from "@/modules/produtos/types";
+import { AbasLista } from "@/modules/produtos/components/abas-lista";
+import { TabelaProdutos } from "@/modules/produtos/components/tabela-produtos";
+import type { Categoria, Produto, Unidade } from "@/modules/produtos/types";
 
 export const metadata = { title: "Produtos · ERP" };
 
@@ -14,14 +15,19 @@ export default async function ProdutosPage({
 }) {
   const { termo } = await searchParams;
   const eu = await obterEu();
-  const caminho = termo ? `/produtos?termo=${encodeURIComponent(termo)}` : "/produtos";
-  const produtos = await carregarDaSessao<Produto[]>(caminho);
+  const parametros = new URLSearchParams({ tipo: "simples", apenas_vendaveis: "true" });
+  if (termo) parametros.set("termo", termo);
+  const [produtos, unidades, categorias] = await Promise.all([
+    carregarDaSessao<Produto[]>(`/produtos?${parametros}`),
+    carregarDaSessao<Unidade[]>("/unidades"),
+    carregarDaSessao<Categoria[]>("/categorias"),
+  ]);
 
   const podeEditar = eu.permissoes.includes("produtos.editar");
   const podeVerCusto = eu.permissoes.includes("produtos.ver_custo");
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-10">
+    <div className="mx-auto max-w-6xl px-6 py-10">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <h1 className="text-2xl font-semibold tracking-tight text-[#16222b]">Produtos</h1>
         {podeEditar ? (
@@ -33,6 +39,15 @@ export default async function ProdutosPage({
           </Link>
         ) : null}
       </div>
+      <p className="mt-2 max-w-prose text-sm text-[#5b6b75]">
+        O que você vende diretamente. Matéria-prima e insumos ficam em{" "}
+        <Link href="/produtos/insumos" className="text-[#0f6d5c] hover:underline">
+          Insumos
+        </Link>
+        .
+      </p>
+
+      <AbasLista ativa="vendaveis" />
 
       <form action="/produtos" className="mt-6 flex gap-3">
         <input
@@ -50,58 +65,20 @@ export default async function ProdutosPage({
         </button>
       </form>
 
-      {produtos.length === 0 ? (
-        <p className="mt-10 text-sm text-[#5b6b75]">
-          {termo
+      <TabelaProdutos
+        produtos={produtos}
+        unidades={unidades}
+        categorias={categorias}
+        podeEditar={podeEditar}
+        podeVerCusto={podeVerCusto}
+        podeMovimentarEstoque={eu.permissoes.includes("estoque.movimentar")}
+        podeAjustarEstoque={eu.permissoes.includes("estoque.ajustar")}
+        mensagemVazia={
+          termo
             ? "Nenhum produto encontrado para essa busca."
-            : "Você ainda não cadastrou produtos. Comece pelo que você vende mais."}
-        </p>
-      ) : (
-        <div className="mt-8 overflow-x-auto rounded-lg border border-[#dbe1e4] bg-white">
-          <table className="w-full text-sm">
-            <thead className="border-b border-[#dbe1e4] text-left text-[#5b6b75]">
-              <tr>
-                <th className="px-4 py-3 font-medium">Produto</th>
-                <th className="px-4 py-3 font-medium">SKU</th>
-                <th className="px-4 py-3 font-medium">Un.</th>
-                <th className="px-4 py-3 text-right font-medium">Preço</th>
-                {podeVerCusto ? (
-                  <th className="px-4 py-3 text-right font-medium">Margem</th>
-                ) : null}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#dbe1e4]">
-              {produtos.map((produto) => (
-                <tr key={produto.id} className="transition-colors hover:bg-[#f7f8f8]">
-                  <td className="px-4 py-3">
-                    <Link
-                      href={`/produtos/${produto.id}`}
-                      className="font-medium text-[#16222b] hover:text-[#0f6d5c]"
-                    >
-                      {produto.nome}
-                    </Link>
-                    {produto.insumo ? (
-                      <span className="ml-2 text-xs text-[#5b6b75]">
-                        {produto.vendavel ? "insumo e venda" : "insumo"}
-                      </span>
-                    ) : null}
-                  </td>
-                  <td className="px-4 py-3 tabular-nums text-[#5b6b75]">{produto.sku}</td>
-                  <td className="px-4 py-3 text-[#5b6b75]">{produto.unidade_codigo}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-[#16222b]">
-                    {moeda(produto.preco_venda)}
-                  </td>
-                  {podeVerCusto ? (
-                    <td className="px-4 py-3 text-right tabular-nums text-[#5b6b75]">
-                      {produto.margem_percentual ? porcentagem(produto.margem_percentual) : "—"}
-                    </td>
-                  ) : null}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            : "Você ainda não cadastrou produtos. Comece pelo que você vende mais."
+        }
+      />
     </div>
   );
 }

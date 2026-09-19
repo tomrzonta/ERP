@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { mensagemDoErro, SessaoExpirada } from "@/lib/server/api";
 import { chamarComSessao, limparSessao } from "@/lib/server/sessao";
 import type { EstadoFormulario } from "@/modules/auth/types";
-import type { Produto, UnidadeAlternativa } from "./types";
+import type { CustoAdicional, Produto, UnidadeAlternativa } from "./types";
 
 function texto(dados: FormData, campo: string): string {
   return String(dados.get(campo) ?? "").trim();
@@ -20,6 +20,12 @@ function opcional(dados: FormData, campo: string): string | null {
 function booleano(dados: FormData, campo: string): boolean {
   const valores = dados.getAll(campo);
   return valores[valores.length - 1] === "true";
+}
+
+/** Zero (ou vazio) = sem estoque mínimo, ou seja, sem alerta de estoque baixo. */
+function estoqueMinimo(dados: FormData): string | null {
+  const valor = opcional(dados, "estoque_minimo");
+  return valor !== null && Number(valor) > 0 ? valor : null;
 }
 
 async function comSessao<T>(
@@ -43,6 +49,7 @@ export async function criarProduto(
   const corpo = {
     nome: texto(dados, "nome"),
     unidade_codigo: texto(dados, "unidade_codigo"),
+    tipo: texto(dados, "tipo") || "simples",
     sku: opcional(dados, "sku"),
     categoria_id: opcional(dados, "categoria_id"),
     preco_venda: texto(dados, "preco_venda") || "0",
@@ -50,6 +57,7 @@ export async function criarProduto(
     vendavel: booleano(dados, "vendavel"),
     insumo: booleano(dados, "insumo"),
     controla_estoque: booleano(dados, "controla_estoque"),
+    estoque_minimo: estoqueMinimo(dados),
     codigo_barras: opcional(dados, "codigo_barras"),
     descricao: opcional(dados, "descricao"),
   };
@@ -70,15 +78,21 @@ export async function atualizarProduto(
   _anterior: EstadoFormulario,
   dados: FormData,
 ): Promise<EstadoFormulario> {
+  // custo_medio só existe no formulário para quem tem produtos.ver_custo — se
+  // não veio no envio, não é pra mexer nele (nunca zera por omissão).
+  const custoMedio = opcional(dados, "custo_medio");
+
   const corpo = {
     nome: texto(dados, "nome"),
     sku: texto(dados, "sku"),
     unidade_codigo: texto(dados, "unidade_codigo"),
     categoria_id: opcional(dados, "categoria_id"),
     preco_venda: texto(dados, "preco_venda") || "0",
+    ...(custoMedio !== null ? { custo_medio: custoMedio } : {}),
     vendavel: booleano(dados, "vendavel"),
     insumo: booleano(dados, "insumo"),
     controla_estoque: booleano(dados, "controla_estoque"),
+    estoque_minimo: estoqueMinimo(dados),
     codigo_barras: opcional(dados, "codigo_barras"),
     descricao: opcional(dados, "descricao"),
     publicado_na_vitrine: booleano(dados, "publicado_na_vitrine"),
@@ -124,6 +138,40 @@ export async function adicionarUnidade(
 
   revalidatePath(`/produtos/${produtoId}`);
   return { erro: "" };
+}
+
+export async function adicionarCustoAdicional(
+  produtoId: string,
+  _anterior: EstadoFormulario,
+  dados: FormData,
+): Promise<EstadoFormulario> {
+  const nome = texto(dados, "nome");
+  const valor = texto(dados, "valor");
+  if (!nome || !valor) {
+    return { erro: "Informe o nome e o valor do custo adicional." };
+  }
+
+  const resultado = await comSessao(() =>
+    chamarComSessao<CustoAdicional>(`/produtos/${produtoId}/custos-adicionais`, {
+      metodo: "POST",
+      corpo: { nome, valor },
+    }),
+  );
+  if (!resultado.ok) {
+    return { erro: resultado.erro };
+  }
+
+  revalidatePath(`/produtos/${produtoId}`);
+  return { erro: "" };
+}
+
+export async function removerCustoAdicional(produtoId: string, custoId: string): Promise<void> {
+  const resultado = await comSessao(() =>
+    chamarComSessao(`/produtos/${produtoId}/custos-adicionais/${custoId}`, { metodo: "DELETE" }),
+  );
+  if (resultado.ok) {
+    revalidatePath(`/produtos/${produtoId}`);
+  }
 }
 
 export async function criarCategoria(

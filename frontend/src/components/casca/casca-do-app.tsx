@@ -2,9 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { MENU, type ItemMenu } from "@/components/navegacao/itens";
+import { IndicadorConexao } from "@/components/pwa/indicador-conexao";
+import { MotorSincronizacao } from "@/components/pwa/motor-sincronizacao";
+import { SincronizarSessao } from "@/components/pwa/sincronizar-sessao";
 import { sair } from "@/modules/auth/actions";
 import type { Eu } from "@/modules/auth/types";
 
@@ -38,10 +41,13 @@ export function CascaDoApp({ eu, children }: { eu: Eu; children: ReactNode }) {
     itens.filter((item) => grupoAtivo(item, caminho)).map((item) => item.titulo),
   );
 
-  // Navegar fecha o menu no celular
-  useEffect(() => {
+  // Navegar fecha o menu no celular. Ajustar durante a renderização (em vez
+  // de um useEffect) evita o re-render em cascata de um setState no efeito.
+  const [caminhoAnterior, setCaminhoAnterior] = useState(caminho);
+  if (caminho !== caminhoAnterior) {
+    setCaminhoAnterior(caminho);
     setMenuAberto(false);
-  }, [caminho]);
+  }
 
   function alternar(titulo: string) {
     setAbertos((atuais) =>
@@ -53,6 +59,8 @@ export function CascaDoApp({ eu, children }: { eu: Eu; children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-[#f7f8f8] lg:grid lg:grid-cols-[16rem_1fr]">
+      <MotorSincronizacao />
+      <SincronizarSessao eu={eu} />
       {/* Barra do celular */}
       <div className="flex items-center justify-between border-b border-[#dbe1e4] bg-white px-4 py-3 lg:hidden">
         <button
@@ -65,6 +73,7 @@ export function CascaDoApp({ eu, children }: { eu: Eu; children: ReactNode }) {
           Menu
         </button>
         <p className="font-medium text-[#16222b]">{eu.empresa.nome}</p>
+        <IndicadorConexao variante="claro" />
       </div>
 
       <aside
@@ -81,6 +90,9 @@ export function CascaDoApp({ eu, children }: { eu: Eu; children: ReactNode }) {
             <p className="mt-0.5 text-xs text-[#a9bac4]">
               Plano {eu.plano === "pro" ? "Pro" : "Base"}
             </p>
+            <div className="mt-2">
+              <IndicadorConexao variante="escuro" />
+            </div>
           </div>
 
           <nav className="flex-1 overflow-y-auto px-3 py-4" aria-label="Menu principal">

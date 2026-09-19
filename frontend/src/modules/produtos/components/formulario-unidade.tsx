@@ -5,6 +5,7 @@ import { useActionState } from "react";
 import { Aviso } from "@/components/ui/aviso";
 import { BotaoEnviar } from "@/components/ui/botao";
 import { Campo } from "@/components/ui/campo";
+import { CampoNumero } from "@/components/ui/campo-numero";
 import { Marcador } from "@/components/ui/marcador";
 import type { EstadoFormulario } from "@/modules/auth/types";
 
@@ -24,12 +25,11 @@ export function FormularioUnidade({
       {estado?.erro ? <Aviso>{estado.erro}</Aviso> : null}
       <div className="grid gap-4 sm:grid-cols-2">
         <Campo nome="nome" rotulo="Nome" placeholder="Fatia, rolo, caixa" required maxLength={30} />
-        <Campo
+        <CampoNumero
           nome="fator"
+          formato="quantidade"
+          positivo
           rotulo={`Quanto vale em ${unidadeBase}`}
-          tipo="number"
-          step="0.0001"
-          min="0.0001"
           required
           dica="Fatia de bolo: 0,125. Rolo de filamento: 1000."
         />

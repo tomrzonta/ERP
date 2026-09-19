@@ -60,7 +60,7 @@ export async function tokenDeAcesso(): Promise<string | null> {
 /** Chama a API com o token da sessão. Sem token válido, SessaoExpirada. */
 export async function chamarComSessao<T>(
   caminho: string,
-  opcoes: { metodo?: "GET" | "POST" | "PATCH" | "DELETE"; corpo?: unknown } = {},
+  opcoes: { metodo?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"; corpo?: unknown } = {},
 ): Promise<T> {
   const token = await tokenDeAcesso();
   if (!token) {

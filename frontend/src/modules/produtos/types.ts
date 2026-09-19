@@ -13,11 +13,13 @@ export type Categoria = {
   categoria_pai_id: string | null;
 };
 
+export type TipoProduto = "simples" | "kit";
+
 export type Produto = {
   id: string;
   sku: string;
   nome: string;
-  tipo: "simples" | "composto";
+  tipo: TipoProduto;
   status: "ativo" | "inativo" | "congelado";
   unidade_codigo: string;
   categoria_id: string | null;
@@ -25,10 +27,12 @@ export type Produto = {
   insumo: boolean;
   controla_estoque: boolean;
   preco_venda: string;
+  estoque_minimo: string | null;
   codigo_barras: string | null;
   descricao: string | null;
   publicado_na_vitrine: boolean;
   custo_medio: string | null;
+  custo_adicional_total: string | null;
   margem_percentual: string | null;
 };
 
@@ -38,4 +42,10 @@ export type UnidadeAlternativa = {
   fator: string;
   usa_na_compra: boolean;
   usa_na_venda: boolean;
+};
+
+export type CustoAdicional = {
+  id: string;
+  nome: string;
+  valor: string;
 };

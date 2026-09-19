@@ -19,6 +19,13 @@
   }
 }
 
+/* Fonte base maior (18px em vez de 16px): o Tailwind usa rem, então isso
+   aumenta texto, espaçamento e área de toque em todo o sistema de uma vez —
+   pensado para clientes com dificuldade visual. */
+html {
+  font-size: 112.5%;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
