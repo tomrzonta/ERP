@@ -31,6 +31,7 @@ class CategoriaSaida(BaseModel):
 class ProdutoEntrada(BaseModel):
     nome: str = Field(min_length=2, max_length=120)
     unidade_codigo: str = Field(min_length=1, max_length=10)
+    tipo: TipoProduto = TipoProduto.SIMPLES
     sku: str | None = Field(default=None, max_length=40)
     categoria_id: uuid.UUID | None = None
     preco_venda: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
@@ -38,6 +39,7 @@ class ProdutoEntrada(BaseModel):
     vendavel: bool = True
     insumo: bool = False
     controla_estoque: bool = True
+    estoque_minimo: Decimal | None = Field(default=None, ge=0, decimal_places=4)
     codigo_barras: str | None = Field(default=None, max_length=20)
     descricao: str | None = Field(default=None, max_length=500)
 
@@ -50,9 +52,11 @@ class ProdutoAtualizacao(BaseModel):
     unidade_codigo: str | None = Field(default=None, max_length=10)
     categoria_id: uuid.UUID | None = None
     preco_venda: Decimal | None = Field(default=None, ge=0, decimal_places=2)
+    custo_medio: Decimal | None = Field(default=None, ge=0, decimal_places=6)
     vendavel: bool | None = None
     insumo: bool | None = None
     controla_estoque: bool | None = None
+    estoque_minimo: Decimal | None = Field(default=None, ge=0, decimal_places=4)
     codigo_barras: str | None = Field(default=None, max_length=20)
     descricao: str | None = Field(default=None, max_length=500)
     status: StatusProduto | None = None
@@ -61,6 +65,19 @@ class ProdutoAtualizacao(BaseModel):
     ncm: str | None = Field(default=None, max_length=8)
     cest: str | None = Field(default=None, max_length=7)
     origem: str | None = Field(default=None, max_length=1)
+
+
+class CustoAdicionalEntrada(BaseModel):
+    nome: str = Field(min_length=1, max_length=60)
+    valor: Decimal = Field(gt=0)
+
+
+class CustoAdicionalSaida(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    nome: str
+    valor: Decimal
 
 
 class UnidadeAlternativaEntrada(BaseModel):
@@ -94,8 +111,10 @@ class ProdutoSaida(BaseModel):
     insumo: bool
     controla_estoque: bool
     preco_venda: Decimal
+    estoque_minimo: Decimal | None
     codigo_barras: str | None
     descricao: str | None
     publicado_na_vitrine: bool
     custo_medio: Decimal | None = None
+    custo_adicional_total: Decimal | None = None
     margem_percentual: Decimal | None = None

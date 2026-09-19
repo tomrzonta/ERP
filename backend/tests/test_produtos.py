@@ -132,6 +132,21 @@ def test_busca_por_nome_sku_e_codigo_de_barras(db):
     assert len(repo.buscar()) == 2
 
 
+def test_filtros_de_insumo_e_vendaveis_separam_as_telas(db):
+    empresa_id = criar_empresa(db)
+    # Vendável e insumo ao mesmo tempo: aparece nas duas telas, sem duplicar cadastro
+    service.criar_produto(db, empresa_id, nome="Vaso", unidade_codigo="un", insumo=True)
+    service.criar_produto(
+        db, empresa_id, nome="Filamento", unidade_codigo="g", vendavel=False, insumo=True
+    )
+    service.criar_produto(db, empresa_id, nome="Kit vaso", unidade_codigo="un", tipo=TipoProduto.KIT)
+
+    repo = ProdutoRepositorio(db, empresa_id)
+    assert {p.nome for p in repo.buscar(apenas_vendaveis=True, tipo=TipoProduto.SIMPLES)} == {"Vaso"}
+    assert {p.nome for p in repo.buscar(apenas_insumos=True)} == {"Vaso", "Filamento"}
+    assert {p.nome for p in repo.buscar(tipo=TipoProduto.KIT)} == {"Kit vaso"}
+
+
 def test_produtos_de_outra_empresa_nao_aparecem(db):
     primeira = criar_empresa(db)
     segunda = criar_empresa(db)
@@ -153,6 +168,19 @@ def test_atualiza_preco_e_publicacao(db):
     )
     assert atualizado.preco_venda == Decimal("49.90")
     assert atualizado.publicado_na_vitrine is True
+
+
+def test_custo_medio_pode_ser_corrigido_manualmente(db):
+    """Ex.: o fornecedor reajustou o preço do insumo, sem entrada de estoque nova."""
+    empresa_id = criar_empresa(db)
+    filamento = service.criar_produto(
+        db, empresa_id, nome="Filamento", unidade_codigo="g", vendavel=False, insumo=True,
+        custo=Decimal("0.10"),
+    )
+    atualizado = service.atualizar_produto(
+        db, empresa_id, filamento.id, {"custo_medio": Decimal("0.135")}
+    )
+    assert atualizado.custo_medio == Decimal("0.135000")
 
 
 def test_unidades_alternativas_do_produto(db):
@@ -189,9 +217,61 @@ def test_limite_de_produtos_do_plano_base(db):
         service.criar_produto(db, empresa_id, nome="Segundo", unidade_codigo="un")
 
 
-def test_composto_ainda_nao_pode_ser_criado(db):
+def test_kit_sempre_controla_estoque_proprio(db):
     empresa_id = criar_empresa(db)
+    kit = service.criar_produto(
+        db, empresa_id, nome="Kit vaso", unidade_codigo="un", tipo=TipoProduto.KIT,
+        controla_estoque=False,  # ignorado: kit sempre controla o próprio estoque
+    )
+    assert kit.controla_estoque is True
+
+
+def test_limite_de_kits_do_plano(db):
+    from app.modules.assinaturas.models import PlanoRegra
+    from app.modules.assinaturas.regras import PLANO_PRO
+    from app.modules.assinaturas.repository import plano_por_codigo
+
+    empresa_id = criar_empresa(db)
+    pro = plano_por_codigo(db, PLANO_PRO)
+    regra = db.get(PlanoRegra, (pro.id, "max_compostos"))
+    regra.valor = 1
+    db.flush()
+
+    service.criar_produto(db, empresa_id, nome="Kit 1", unidade_codigo="un", tipo=TipoProduto.KIT)
+    with pytest.raises(LimiteDoPlano):
+        service.criar_produto(db, empresa_id, nome="Kit 2", unidade_codigo="un", tipo=TipoProduto.KIT)
+
+
+def test_controla_estoque_de_kit_nao_e_editavel(db):
+    empresa_id = criar_empresa(db)
+    kit = service.criar_produto(db, empresa_id, nome="Kit", unidade_codigo="un", tipo=TipoProduto.KIT)
     with pytest.raises(RegraDeNegocio):
-        service.criar_produto(
-            db, empresa_id, nome="Kit", unidade_codigo="un", tipo=TipoProduto.COMPOSTO
+        service.atualizar_produto(db, empresa_id, kit.id, {"controla_estoque": False})
+
+
+def test_uso_dos_limites_do_plano_pela_api(cliente, db):
+    from app.modules.assinaturas.models import PlanoRegra
+    from app.modules.assinaturas.regras import PLANO_PRO
+    from app.modules.assinaturas.repository import plano_por_codigo
+    from tests.test_auth import cabecalho, cadastrar
+
+    # No Pro os limites são ilimitados; forçamos um teto de 4 pra ver o percentual.
+    pro = plano_por_codigo(db, PLANO_PRO)
+    db.get(PlanoRegra, (pro.id, "max_produtos_simples")).valor = 4
+    db.flush()
+
+    cab = cabecalho(cadastrar(cliente)["tokens"]["access_token"])
+    for nome in ("A", "B", "C"):
+        cliente.post(
+            "/api/v1/produtos", headers=cab, json={"nome": f"Produto {nome}", "unidade_codigo": "un"}
         )
+
+    resposta = cliente.get("/api/v1/assinatura/uso", headers=cab)
+
+    assert resposta.status_code == 200, resposta.text
+    corpo = resposta.json()
+    produtos = next(item for item in corpo["limites"] if item["chave"] == "max_produtos_simples")
+    assert (produtos["usado"], produtos["limite"]) == (3, 4)
+    assert float(produtos["percentual"]) == 75.0
+    kits = next(item for item in corpo["limites"] if item["chave"] == "max_compostos")
+    assert kits["usado"] == 0 and kits["limite"] is None and kits["percentual"] is None

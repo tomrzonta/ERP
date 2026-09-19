@@ -1,10 +1,17 @@
 """Consultas do módulo de produtos."""
 
 import uuid
+from decimal import Decimal
 
 from sqlalchemy import Select, exists, func, or_, select
 
-from app.modules.produtos.models import Categoria, Produto, ProdutoUnidade, TipoProduto
+from app.modules.produtos.models import (
+    Categoria,
+    CustoAdicionalProduto,
+    Produto,
+    ProdutoUnidade,
+    TipoProduto,
+)
 from app.shared.repository import RepositorioDaEmpresa
 
 
@@ -39,6 +46,8 @@ class ProdutoRepositorio(RepositorioDaEmpresa[Produto]):
         termo: str | None = None,
         tipo: TipoProduto | None = None,
         apenas_vendaveis: bool = False,
+        apenas_insumos: bool = False,
+        apenas_com_controle_de_estoque: bool = False,
         limite: int = 50,
         deslocamento: int = 0,
     ) -> list[Produto]:
@@ -56,6 +65,10 @@ class ProdutoRepositorio(RepositorioDaEmpresa[Produto]):
             consulta = consulta.where(Produto.tipo == tipo)
         if apenas_vendaveis:
             consulta = consulta.where(Produto.vendavel.is_(True))
+        if apenas_insumos:
+            consulta = consulta.where(Produto.insumo.is_(True))
+        if apenas_com_controle_de_estoque:
+            consulta = consulta.where(Produto.controla_estoque.is_(True))
         consulta = consulta.order_by(Produto.nome).limit(limite).offset(deslocamento)
         return list(self.db.scalars(consulta))
 
@@ -66,3 +79,33 @@ class ProdutoRepositorio(RepositorioDaEmpresa[Produto]):
             .order_by(ProdutoUnidade.nome)
         )
         return list(self.db.scalars(consulta))
+
+    def unidade_alternativa(
+        self, produto_id: uuid.UUID, unidade_id: uuid.UUID
+    ) -> ProdutoUnidade | None:
+        consulta = select(ProdutoUnidade).where(
+            ProdutoUnidade.produto_id == produto_id, ProdutoUnidade.id == unidade_id
+        )
+        return self.db.scalar(consulta)
+
+    def custos_adicionais(self, produto_id: uuid.UUID) -> list[CustoAdicionalProduto]:
+        consulta = (
+            select(CustoAdicionalProduto)
+            .where(CustoAdicionalProduto.produto_id == produto_id)
+            .order_by(CustoAdicionalProduto.nome)
+        )
+        return list(self.db.scalars(consulta))
+
+    def custo_adicional(
+        self, produto_id: uuid.UUID, custo_id: uuid.UUID
+    ) -> CustoAdicionalProduto | None:
+        consulta = select(CustoAdicionalProduto).where(
+            CustoAdicionalProduto.produto_id == produto_id, CustoAdicionalProduto.id == custo_id
+        )
+        return self.db.scalar(consulta)
+
+    def soma_custos_adicionais(self, produto_id: uuid.UUID) -> Decimal:
+        consulta = select(func.coalesce(func.sum(CustoAdicionalProduto.valor), 0)).where(
+            CustoAdicionalProduto.produto_id == produto_id
+        )
+        return Decimal(self.db.scalar(consulta) or 0)

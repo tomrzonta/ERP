@@ -172,6 +172,7 @@ def test_requer_permissao_bloqueia_quem_nao_tem():
         papel_id=uuid.uuid4(),
         papel_nome="Caixa",
         permissoes=frozenset({"membros.ver"}),
+        limite_desconto_percentual=None,
     )
     assert requer_permissao("membros.ver")(contexto) is contexto
     with pytest.raises(PermissaoNegada):

@@ -1,6 +1,7 @@
 """Acesso: papéis, permissões concedidas e membros de cada empresa."""
 
 import uuid
+from decimal import Decimal
 from enum import StrEnum
 
 from sqlalchemy import (
@@ -8,6 +9,7 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     ForeignKeyConstraint,
+    Numeric,
     String,
     UniqueConstraint,
     false,
@@ -37,6 +39,8 @@ class Papel(UUIDMixin, EmpresaMixin, TimestampMixin, Base):
     codigo_padrao: Mapped[str | None] = mapped_column(String(30))
     # Protegido não pode ser editado nem excluído (ex. Dono)
     protegido: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    # Nulo = sem limite. Acima dele, só quem tem vendas.desconto_acima_limite.
+    limite_desconto_percentual: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
 
 
 class PapelPermissao(Base):

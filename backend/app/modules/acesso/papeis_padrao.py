@@ -9,6 +9,7 @@ já existentes com o mesmo codigo_padrao.
 """
 
 from dataclasses import dataclass
+from decimal import Decimal
 
 DONO = "dono"
 
@@ -20,6 +21,8 @@ class PapelPadrao:
     descricao: str
     protegido: bool
     permissoes: frozenset[str]
+    # Nulo = sem limite de desconto em vendas.
+    limite_desconto_percentual: Decimal | None = None
 
 
 PAPEIS_PADRAO: tuple[PapelPadrao, ...] = (
@@ -44,6 +47,18 @@ PAPEIS_PADRAO: tuple[PapelPadrao, ...] = (
                 "produtos.ver",
                 "produtos.editar",
                 "produtos.ver_custo",
+                "estoque.ver",
+                "estoque.movimentar",
+                "estoque.ajustar",
+                "clientes.ver",
+                "clientes.editar",
+                "vendas.ver",
+                "vendas.registrar",
+                "vendas.desconto_acima_limite",
+                "vendas.cancelar",
+                "financeiro.ver",
+                "financeiro.operar",
+                "relatorios.ver",
             }
         ),
     ),
@@ -52,14 +67,35 @@ PAPEIS_PADRAO: tuple[PapelPadrao, ...] = (
         nome="Caixa",
         descricao="Vendas e caixa do dia",
         protegido=False,
-        # Vê produtos e preços, mas não custo nem margem
-        permissoes=frozenset({"produtos.ver"}),
+        # Vê produtos, preços e saldo de estoque, mas não custo nem margem
+        permissoes=frozenset(
+            {
+                "produtos.ver",
+                "estoque.ver",
+                "clientes.ver",
+                "clientes.editar",
+                "vendas.ver",
+                "vendas.registrar",
+                "financeiro.ver",
+                "financeiro.operar",
+            }
+        ),
+        limite_desconto_percentual=Decimal("10"),
     ),
     PapelPadrao(
         codigo="estoquista",
         nome="Estoquista",
         descricao="Produtos e movimentações de estoque",
         protegido=False,
-        permissoes=frozenset({"produtos.ver", "produtos.editar", "produtos.ver_custo"}),
+        permissoes=frozenset(
+            {
+                "produtos.ver",
+                "produtos.editar",
+                "produtos.ver_custo",
+                "estoque.ver",
+                "estoque.movimentar",
+                "estoque.ajustar",
+            }
+        ),
     ),
 )

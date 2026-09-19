@@ -5,12 +5,13 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import Conflito, RegraDeNegocio
+from app.core.exceptions import Conflito, NaoEncontrado, RegraDeNegocio
 from app.modules.assinaturas import service as assinaturas_service
-from app.modules.assinaturas.regras import Limite
+from app.modules.assinaturas.regras import Limite, Recurso
 from app.modules.produtos import unidades as catalogo_unidades
 from app.modules.produtos.models import (
     Categoria,
+    CustoAdicionalProduto,
     Produto,
     ProdutoUnidade,
     StatusProduto,
@@ -21,7 +22,7 @@ from app.shared.quantidade import to_custo
 
 LIMITE_POR_TIPO = {
     TipoProduto.SIMPLES: Limite.MAX_PRODUTOS_SIMPLES,
-    TipoProduto.COMPOSTO: Limite.MAX_COMPOSTOS,
+    TipoProduto.KIT: Limite.MAX_COMPOSTOS,
 }
 
 
@@ -75,12 +76,10 @@ def criar_produto(
     vendavel: bool = True,
     insumo: bool = False,
     controla_estoque: bool = True,
+    estoque_minimo: Decimal | None = None,
     codigo_barras: str | None = None,
     descricao: str | None = None,
 ) -> Produto:
-    if tipo is TipoProduto.COMPOSTO:
-        raise RegraDeNegocio("Produtos compostos serão criados na etapa de composição.")
-
     repo = ProdutoRepositorio(db, empresa_id)
 
     # Unidade precisa existir no catálogo
@@ -92,7 +91,6 @@ def criar_produto(
     if categoria_id is not None:
         CategoriaRepositorio(db, empresa_id).obter_ou_erro(categoria_id)
 
-    # Limite do plano por tipo de produto
     assinaturas_service.verificar_limite(
         db, empresa_id, LIMITE_POR_TIPO[tipo], repo.contar_por_tipo(tipo)
     )
@@ -100,6 +98,10 @@ def criar_produto(
     sku_final = (sku or "").strip().upper() or proximo_sku(repo)
     if repo.sku_em_uso(sku_final):
         raise Conflito(f"O SKU {sku_final} já está em uso.")
+
+    # Kit sempre tem saldo próprio: é ele quem a montagem credita.
+    if tipo is TipoProduto.KIT:
+        controla_estoque = True
 
     return repo.adicionar(
         Produto(
@@ -114,10 +116,15 @@ def criar_produto(
             vendavel=vendavel,
             insumo=insumo,
             controla_estoque=controla_estoque,
+            estoque_minimo=estoque_minimo,
             codigo_barras=(codigo_barras or "").strip() or None,
             descricao=(descricao or "").strip() or None,
         )
     )
+
+
+def contar_por_tipo(db: Session, empresa_id: uuid.UUID, tipo: TipoProduto) -> int:
+    return ProdutoRepositorio(db, empresa_id).contar_por_tipo(tipo)
 
 
 def obter_produto(db: Session, empresa_id: uuid.UUID, produto_id: uuid.UUID) -> Produto:
@@ -150,6 +157,11 @@ def atualizar_produto(
     if campos.get("categoria_id") is not None:
         CategoriaRepositorio(db, empresa_id).obter_ou_erro(campos["categoria_id"])
 
+    if "controla_estoque" in campos and produto.tipo is not TipoProduto.SIMPLES:
+        raise RegraDeNegocio(
+            "O controle de estoque de um kit é sempre ligado; é definido pelo tipo do produto."
+        )
+
     for campo, valor in campos.items():
         setattr(produto, campo, valor)
 
@@ -158,6 +170,50 @@ def atualizar_produto(
 
     db.flush()
     return produto
+
+
+def registrar_custo(
+    db: Session,
+    empresa_id: uuid.UUID,
+    produto_id: uuid.UUID,
+    *,
+    custo_medio: Decimal,
+    custo_ultima_compra: Decimal | None = None,
+) -> Produto:
+    """Atualiza o custo do produto a partir de um movimento de estoque.
+
+    Quem calcula o novo custo médio é o módulo de estoque, que tem o saldo
+    físico travado; aqui só gravamos. Não passa pela checagem de produto
+    congelado: é o sistema atualizando custo, não o usuário editando.
+    """
+    produto = ProdutoRepositorio(db, empresa_id).obter_ou_erro(produto_id)
+    produto.custo_medio = to_custo(custo_medio)
+    if custo_ultima_compra is not None:
+        produto.custo_ultima_compra = to_custo(custo_ultima_compra)
+    db.flush()
+    return produto
+
+
+def obter_unidade_para_compra(
+    db: Session, empresa_id: uuid.UUID, produto_id: uuid.UUID, unidade_id: uuid.UUID
+) -> ProdutoUnidade:
+    repo = ProdutoRepositorio(db, empresa_id)
+    repo.obter_ou_erro(produto_id)
+    unidade = repo.unidade_alternativa(produto_id, unidade_id)
+    if unidade is None or not unidade.usa_na_compra:
+        raise NaoEncontrado("Unidade alternativa não encontrada para compra.")
+    return unidade
+
+
+def obter_unidade_para_venda(
+    db: Session, empresa_id: uuid.UUID, produto_id: uuid.UUID, unidade_id: uuid.UUID
+) -> ProdutoUnidade:
+    repo = ProdutoRepositorio(db, empresa_id)
+    repo.obter_ou_erro(produto_id)
+    unidade = repo.unidade_alternativa(produto_id, unidade_id)
+    if unidade is None or not unidade.usa_na_venda:
+        raise NaoEncontrado("Unidade alternativa não encontrada para venda.")
+    return unidade
 
 
 def margem_percentual(produto: Produto) -> Decimal | None:
@@ -213,3 +269,57 @@ def listar_unidades(
     repo = ProdutoRepositorio(db, empresa_id)
     repo.obter_ou_erro(produto_id)
     return repo.unidades_alternativas(produto_id)
+
+
+# --- custos adicionais (Pro) ---
+
+
+def adicionar_custo_adicional(
+    db: Session,
+    empresa_id: uuid.UUID,
+    produto_id: uuid.UUID,
+    *,
+    nome: str,
+    valor: Decimal,
+) -> CustoAdicionalProduto:
+    """Ex.: embalagem, energia, mão de obra — soma ao custo médio na margem."""
+    assinaturas_service.exigir_recurso(db, empresa_id, Recurso.CUSTOS_ADICIONAIS)
+
+    repo = ProdutoRepositorio(db, empresa_id)
+    repo.obter_ou_erro(produto_id)
+
+    if valor <= 0:
+        raise RegraDeNegocio("O custo adicional precisa ser maior que zero.")
+
+    nome = nome.strip()
+    if any(c.nome.lower() == nome.lower() for c in repo.custos_adicionais(produto_id)):
+        raise Conflito(f"O produto já tem um custo adicional chamado {nome}.")
+
+    custo = CustoAdicionalProduto(produto_id=produto_id, nome=nome, valor=to_custo(valor))
+    db.add(custo)
+    db.flush()
+    return custo
+
+
+def remover_custo_adicional(
+    db: Session, empresa_id: uuid.UUID, produto_id: uuid.UUID, custo_id: uuid.UUID
+) -> None:
+    repo = ProdutoRepositorio(db, empresa_id)
+    repo.obter_ou_erro(produto_id)
+    custo = repo.custo_adicional(produto_id, custo_id)
+    if custo is None:
+        raise NaoEncontrado("Custo adicional não encontrado.")
+    db.delete(custo)
+    db.flush()
+
+
+def listar_custos_adicionais(
+    db: Session, empresa_id: uuid.UUID, produto_id: uuid.UUID
+) -> list[CustoAdicionalProduto]:
+    repo = ProdutoRepositorio(db, empresa_id)
+    repo.obter_ou_erro(produto_id)
+    return repo.custos_adicionais(produto_id)
+
+
+def soma_custos_adicionais(db: Session, empresa_id: uuid.UUID, produto_id: uuid.UUID) -> Decimal:
+    return ProdutoRepositorio(db, empresa_id).soma_custos_adicionais(produto_id)

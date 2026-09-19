@@ -34,6 +34,7 @@ def criar_papeis_padrao(db: Session, empresa_id: uuid.UUID) -> dict[str, Papel]:
             descricao=modelo.descricao,
             codigo_padrao=modelo.codigo,
             protegido=modelo.protegido,
+            limite_desconto_percentual=modelo.limite_desconto_percentual,
         )
         db.add(papel)
         db.flush()
