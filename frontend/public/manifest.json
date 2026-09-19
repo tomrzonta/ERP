@@ -1,0 +1,10 @@
+{
+  "name": "ERP",
+  "short_name": "ERP",
+  "description": "ERP para microempreendedores",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f8f8",
+  "theme_color": "#0f6d5c",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

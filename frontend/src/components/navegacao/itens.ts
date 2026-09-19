@@ -15,41 +15,34 @@ export type ItemMenu = {
 };
 
 export const MENU: ItemMenu[] = [
-  { titulo: "Início", href: "/" },
+  { titulo: "Painel", href: "/", permissao: "relatorios.ver" },
   {
     titulo: "Produtos",
     permissao: "produtos.ver",
     filhos: [
-      { titulo: "Todos os produtos", href: "/produtos" },
+      { titulo: "Vendáveis", href: "/produtos" },
+      { titulo: "Insumos", href: "/produtos/insumos" },
+      { titulo: "Kits", href: "/produtos/kits" },
       { titulo: "Novo produto", href: "/produtos/novo", permissao: "produtos.editar" },
       { titulo: "Categorias", emBreve: true },
-      { titulo: "Composições", emBreve: true },
     ],
   },
   {
     titulo: "Estoque",
-    filhos: [
-      { titulo: "Movimentações", emBreve: true },
-      { titulo: "Entradas e compras", emBreve: true },
-      { titulo: "Ajustes", emBreve: true },
-    ],
+    permissao: "estoque.ver",
+    filhos: [{ titulo: "Saldos", href: "/estoque" }],
   },
-  {
-    titulo: "Vendas",
-    filhos: [
-      { titulo: "Caixa", emBreve: true },
-      { titulo: "Histórico", emBreve: true },
-    ],
-  },
-  { titulo: "Clientes", emBreve: true },
+  { titulo: "Vendas", href: "/vendas", permissao: "vendas.ver" },
+  { titulo: "Clientes", href: "/clientes", permissao: "clientes.ver" },
   {
     titulo: "Financeiro",
+    permissao: "financeiro.ver",
     filhos: [
-      { titulo: "Caixa do dia", emBreve: true },
-      { titulo: "Contas a pagar e receber", emBreve: true },
+      { titulo: "Caixa do dia", href: "/caixa" },
+      { titulo: "Histórico de caixas", href: "/caixa/historico" },
+      { titulo: "Contas a pagar e receber", href: "/contas" },
     ],
   },
-  { titulo: "Relatórios", emBreve: true },
   {
     titulo: "Configurações",
     filhos: [

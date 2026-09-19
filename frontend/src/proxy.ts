@@ -78,5 +78,10 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // Arquivos do PWA (manifest, ícone, service worker) e a página de
+  // fallback offline precisam responder sem sessão — inclusive pro próprio
+  // service worker conseguir pré-cachear /offline na instalação.
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|manifest.json|icon.svg|sw.js|offline).*)",
+  ],
 };

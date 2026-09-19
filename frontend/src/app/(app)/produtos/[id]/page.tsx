@@ -3,10 +3,21 @@ import Link from "next/link";
 import { moeda, numero } from "@/lib/formato";
 import { carregarDaSessao } from "@/lib/server/sessao";
 import { obterEu } from "@/modules/auth/eu";
-import { adicionarUnidade, atualizarProduto } from "@/modules/produtos/actions";
-import { FormularioProduto } from "@/modules/produtos/components/formulario-produto";
+import { adicionarComponente, criarInsumoEAdicionar } from "@/modules/composicao/actions";
+import { SecaoComponentes } from "@/modules/composicao/components/secao-componentes";
+import type { ComponenteExibido } from "@/modules/composicao/components/lista-componentes";
+import type { Componente } from "@/modules/composicao/types";
+import { adicionarUnidade } from "@/modules/produtos/actions";
 import { FormularioUnidade } from "@/modules/produtos/components/formulario-unidade";
-import type { Categoria, Produto, Unidade, UnidadeAlternativa } from "@/modules/produtos/types";
+import { SecaoCustosAdicionais } from "@/modules/produtos/components/secao-custos-adicionais";
+import { SecaoDados } from "@/modules/produtos/components/secao-dados";
+import type {
+  Categoria,
+  CustoAdicional,
+  Produto,
+  Unidade,
+  UnidadeAlternativa,
+} from "@/modules/produtos/types";
 
 export default async function ProdutoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -20,9 +31,40 @@ export default async function ProdutoPage({ params }: { params: Promise<{ id: st
 
   const podeEditar = eu.permissoes.includes("produtos.editar");
   const podeVerCusto = eu.permissoes.includes("produtos.ver_custo");
+  const podeVerEstoque = eu.permissoes.includes("estoque.ver");
+  const ehKit = produto.tipo === "kit";
+
+  let componentesExibidos: ComponenteExibido[] = [];
+  let candidatos: Produto[] = [];
+
+  if (ehKit) {
+    const [componentes, todosOsProdutos] = await Promise.all([
+      carregarDaSessao<Componente[]>(`/produtos/${id}/componentes`),
+      carregarDaSessao<Produto[]>("/produtos?limite=200"),
+    ]);
+    const produtosPorId = new Map(todosOsProdutos.map((p) => [p.id, p]));
+    componentesExibidos = componentes.map((componente) => {
+      const produtoComponente = produtosPorId.get(componente.componente_id);
+      return {
+        ...componente,
+        nome: produtoComponente?.nome ?? "Produto removido",
+        sku: produtoComponente?.sku ?? "—",
+        unidadeCodigo: produtoComponente?.unidade_codigo ?? "",
+      };
+    });
+    const jaAdicionados = new Set(componentes.map((c) => c.componente_id));
+    candidatos = todosOsProdutos.filter((p) => p.id !== id && !jaAdicionados.has(p.id));
+  }
+
+  let custosAdicionais: CustoAdicional[] = [];
+  if (podeVerCusto) {
+    custosAdicionais = await carregarDaSessao<CustoAdicional[]>(
+      `/produtos/${id}/custos-adicionais`,
+    );
+  }
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-10">
+    <div className="mx-auto max-w-5xl px-6 py-10">
       <Link href="/produtos" className="text-sm text-[#5b6b75] hover:text-[#16222b]">
         Voltar para produtos
       </Link>
@@ -34,8 +76,17 @@ export default async function ProdutoPage({ params }: { params: Promise<{ id: st
         </p>
       </div>
 
+      {podeVerEstoque && produto.controla_estoque ? (
+        <Link
+          href={`/produtos/${produto.id}/estoque`}
+          className="mt-4 inline-block rounded-md border border-[#dbe1e4] bg-white px-4 py-2 text-sm text-[#16222b] transition-colors hover:border-[#0f6d5c]"
+        >
+          Ver estoque
+        </Link>
+      ) : null}
+
       {podeVerCusto ? (
-        <dl className="mt-8 grid gap-px overflow-hidden rounded-lg border border-[#dbe1e4] bg-[#dbe1e4] sm:grid-cols-3">
+        <dl className="mt-8 grid gap-px overflow-hidden rounded-lg border border-[#dbe1e4] bg-[#dbe1e4] sm:grid-cols-4">
           <div className="bg-white px-4 py-5">
             <dt className="text-sm text-[#5b6b75]">Preço</dt>
             <dd className="mt-1 text-lg font-medium tabular-nums text-[#16222b]">
@@ -46,6 +97,12 @@ export default async function ProdutoPage({ params }: { params: Promise<{ id: st
             <dt className="text-sm text-[#5b6b75]">Custo médio</dt>
             <dd className="mt-1 text-lg font-medium tabular-nums text-[#16222b]">
               {moeda(produto.custo_medio ?? "0")}
+            </dd>
+          </div>
+          <div className="bg-white px-4 py-5">
+            <dt className="text-sm text-[#5b6b75]">Custo adicional</dt>
+            <dd className="mt-1 text-lg font-medium tabular-nums text-[#16222b]">
+              {moeda(produto.custo_adicional_total ?? "0")}
             </dd>
           </div>
           <div className="bg-white px-4 py-5">
@@ -64,17 +121,31 @@ export default async function ProdutoPage({ params }: { params: Promise<{ id: st
         </p>
       ) : null}
 
-      {podeEditar ? (
-        <section className="mt-10">
-          <h2 className="text-lg font-semibold tracking-tight text-[#16222b]">Dados</h2>
-          <div className="mt-5">
-            <FormularioProduto
-              acao={atualizarProduto.bind(null, produto.id)}
+      <SecaoDados
+        unidades={unidades}
+        categorias={categorias}
+        produto={produto}
+        podeEditar={podeEditar}
+        podeVerCusto={podeVerCusto}
+      />
+
+      {ehKit ? (
+        <section className="mt-12 border-t border-[#dbe1e4] pt-8">
+          <h2 className="text-lg font-semibold tracking-tight text-[#16222b]">Componentes</h2>
+          <p className="mt-2 max-w-prose text-sm text-[#5b6b75]">
+            O que a montagem consome para gerar uma unidade deste kit. O saldo de cada
+            componente continua sendo controlado nele mesmo.
+          </p>
+
+          <div className="mt-6">
+            <SecaoComponentes
+              produtoCompostoId={produto.id}
+              componentes={componentesExibidos}
+              candidatos={candidatos}
               unidades={unidades}
-              categorias={categorias}
-              produto={produto}
-              podeVerCusto={podeVerCusto}
-              textoBotao="Salvar alterações"
+              podeEditar={Boolean(podeEditar && produto.status !== "congelado")}
+              acaoAdicionar={adicionarComponente.bind(null, produto.id)}
+              acaoCriarInsumo={criarInsumoEAdicionar.bind(null, produto.id)}
             />
           </div>
         </section>
@@ -121,6 +192,14 @@ export default async function ProdutoPage({ params }: { params: Promise<{ id: st
           </div>
         ) : null}
       </section>
+
+      {podeVerCusto ? (
+        <SecaoCustosAdicionais
+          produtoId={produto.id}
+          custos={custosAdicionais}
+          podeEditar={podeEditar}
+        />
+      ) : null}
     </div>
   );
 }

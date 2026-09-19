@@ -25,7 +25,7 @@ export class SessaoExpirada extends Error {
 }
 
 type Opcoes = {
-  metodo?: "GET" | "POST" | "PATCH" | "DELETE";
+  metodo?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   corpo?: unknown;
   token?: string | null;
 };
